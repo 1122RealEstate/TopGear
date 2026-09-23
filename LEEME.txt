@@ -1,0 +1,68 @@
+TOP GEAR · SUPERCAR LEGENDS
+===========================
+
+CÓMO ABRIR EL JUEGO
+- Mac: doble clic en «Top Gear.app».
+  Si lo copias a otro Mac y macOS dice que no puede verificar al desarrollador:
+  clic derecho sobre la app → Abrir → Abrir.
+- Cualquier ordenador: abre «TopGear.html» con Chrome, Safari, Edge o Firefox.
+- Windows: doble clic en «Jugar en Windows.bat» (abre el juego en una ventana de Edge o Chrome).
+
+CONTROLES (se pueden cambiar en Opciones → Configurar controles del teclado)
+  Acelerar ............. ↑ o W
+  Frenar ............... ↓ o S
+  Girar ................ ← → o A D
+  Nitro ................ Espacio o Mayús izquierda
+  Cambio manual ........ E / X sube · Q / Z baja (actívalo en Opciones → Cambio de marchas)
+  Pausa ................ Esc o P
+  Música sí/no ......... M
+  Pantalla completa .... Ctrl + Cmd + F en la app de Mac (o en Opciones)
+
+  2 JUGADORES (pantalla dividida, mismo teclado)
+  Jugador 1 (arriba) ... W A S D · nitro: Mayús izquierda · marchas: E sube, Q baja
+  Jugador 2 (abajo) .... Flechas · nitro: Mayús derecha · marchas: . sube, , baja
+
+  MENÚS: flechas para moverte, Intro para elegir, Esc para volver. El ratón también funciona.
+
+MODOS DE JUEGO
+- Campeonato: 8 copas (Estados Unidos, Sudamérica, Japón, Alemania, Escandinavia,
+  Francia, Italia y Reino Unido), 4 carreras cada una, 32 circuitos en total.
+  Termina una copa entre los 3 primeros para desbloquear la siguiente.
+  En cada carrera ganas: premio por puesto + monedas recogidas + bonus de carrera limpia
+  y de récord de vuelta. Al acabar la copa en el podio cobras además el bonus de copa.
+- Carrera rápida: cualquier circuito desbloqueado; eliges vueltas y rivales (75% del premio).
+- 2 jugadores: duelo en pantalla dividida, con o sin rivales de la CPU.
+- Contrarreloj: tú contra el crono y contra tu coche fantasma (tu mejor vuelta guardada).
+
+DINERO, MEJORAS Y COCHES
+- Garaje: elige el coche con el que compites, píntalo (gratis) y entra al Taller.
+- Taller de mejoras: Motor, Turbo, Transmisión, Neumáticos, Nitro, Depósito y Chasis.
+- Concesionario: 15 coches, desde el Ford Mustang GT inicial hasta el Bugatti Chiron
+  Super Sport (490 km/h): Nissan GT-R Nismo, Aston Martin Vantage y Valkyrie,
+  Mercedes-AMG GT R, Porsche 911 Turbo S, Audi R8 V10, Lamborghini Huracán EVO y
+  Aventador SVJ, McLaren 720S, Ferrari F8 Tributo y LaFerrari, Bugatti Veyron 16.4,
+  Koenigsegg Jesko y Bugatti Chiron Super Sport.
+- En cada copa verás la velocidad de los rivales: si tu coche no llega, mejora el motor
+  o compra uno más rápido.
+
+CONSEJOS
+- En la salida, mantén la aguja en la zona verde del cuentarrevoluciones: salida perfecta.
+- Recoge los bidones rojos: sin gasolina el coche apenas avanza.
+- Pégate detrás de un rival para aprovechar el rebufo y adelantarlo.
+- Usa el nitro en las rectas; antes de una curva cerrada suelta un poco el acelerador.
+- Salirte de la carretera frena mucho y chocar contra el decorado aún más.
+- Si notas tirones, baja la calidad gráfica en Opciones.
+
+PARTIDA GUARDADA
+- App de Mac: ~/Library/Application Support/TopGear Supercar Legends/partida.json
+- Navegador: se guarda automáticamente en el propio navegador.
+- Opciones → Borrar la partida para empezar de cero.
+
+CÓDIGO FUENTE
+- La carpeta «source» contiene todo el código del juego. Para reconstruir la app y el HTML:
+      cd source
+      ./build_mac.sh
+  (necesita Node.js y las herramientas de desarrollo de Xcode).
+
+Juego de fans inspirado en el clásico Top Gear (1992). Todo el arte, la música y los
+sonidos se generan con código. Las marcas y modelos de coches pertenecen a sus dueños.
