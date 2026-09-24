@@ -2,6 +2,7 @@
 // Muestra el juego HTML en una ventana propia (WebKit) y guarda la partida en disco.
 import Cocoa
 import WebKit
+import UniformTypeIdentifiers
 
 final class GameWindow: NSWindow {
     // Evita el pitido del sistema con teclas que la web ya ha gestionado
@@ -25,6 +26,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("partida.json")
     }()
+    lazy var backupURL: URL = saveURL.deletingLastPathComponent().appendingPathComponent("partida.bak.json")
+    var backedUp = false
+
+    // Convierte un texto en un literal de JavaScript seguro
+    func jsLiteral(_ str: String) -> String? {
+        guard let json = try? JSONSerialization.data(withJSONObject: [str]), let lit = String(data: json, encoding: .utf8) else { return nil }
+        return lit + "[0]"
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         buildMenu()
@@ -34,11 +43,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         ucc.add(self, name: "tgSave")
         ucc.add(self, name: "tgApp")
         var boot = "window.__TG_NATIVE = true;"
-        if let data = try? Data(contentsOf: saveURL),
-           let str = String(data: data, encoding: .utf8),
-           let json = try? JSONSerialization.data(withJSONObject: [str]),
-           let lit = String(data: json, encoding: .utf8) {
-            boot += "window.__TG_NATIVE_SAVE = \(lit)[0];"
+        if let data = try? Data(contentsOf: saveURL), let str = String(data: data, encoding: .utf8), let lit = jsLiteral(str) {
+            boot += "window.__TG_NATIVE_SAVE = \(lit);"
+        }
+        if let data = try? Data(contentsOf: backupURL), let str = String(data: data, encoding: .utf8), let lit = jsLiteral(str) {
+            boot += "window.__TG_NATIVE_BAK = \(lit);"
         }
         ucc.addUserScript(WKUserScript(source: boot, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         config.userContentController = ucc
@@ -78,9 +87,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
         guard let body = message.body as? String else { return }
         if message.name == "tgSave" {
+            // copia de seguridad de la partida anterior (una vez por sesión)
+            if !backedUp, FileManager.default.fileExists(atPath: saveURL.path) {
+                try? FileManager.default.removeItem(at: backupURL)
+                try? FileManager.default.copyItem(at: saveURL, to: backupURL)
+                backedUp = true
+            }
             try? body.data(using: .utf8)?.write(to: saveURL, options: .atomic)
         } else if message.name == "tgApp" {
+            if body.hasPrefix("export:") {
+                exportSave(String(body.dropFirst(7)))
+                return
+            }
             switch body {
+            case "import": importSave()
             case "fullscreen": window.toggleFullScreen(nil)
             case "quit": NSApp.terminate(nil)
             case "ready":
@@ -88,6 +108,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
                 if ProcessInfo.processInfo.environment["TG_LOG"] != nil { print("TG_READY") }
             default: break
             }
+        }
+    }
+
+    // Exportar la partida a un archivo elegido por el usuario
+    func exportSave(_ text: String) {
+        let panel = NSSavePanel()
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
+        panel.nameFieldStringValue = "TopGear-partida-\(f.string(from: Date())).json"
+        panel.allowedContentTypes = [.json]
+        panel.beginSheetModal(for: window) { resp in
+            guard resp == .OK, let url = panel.url else { return }
+            try? text.data(using: .utf8)?.write(to: url, options: .atomic)
+        }
+    }
+
+    // Importar una partida desde un archivo .json
+    func importSave() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = false
+        panel.beginSheetModal(for: window) { [weak self] resp in
+            guard let self = self, resp == .OK, let url = panel.url,
+                  let data = try? Data(contentsOf: url), let str = String(data: data, encoding: .utf8), let lit = self.jsLiteral(str) else { return }
+            self.webView.evaluateJavaScript("TG.UI.importDone(TG.Save.importText(\(lit)))", completionHandler: nil)
         }
     }
 

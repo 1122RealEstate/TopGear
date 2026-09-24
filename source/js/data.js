@@ -954,8 +954,12 @@
         tr('silverstone', 'Silverstone', 'silverstone', 1803, { curvy: 0.5, hilly: 0.2, len: 1.1 }), tr('stonehenge', 'Stonehenge', 'stonehenge', 1804, { curvy: 0.6, hilly: 0.55 })] },
   ];
   TG.TRACKS = {};
+  // exigencia extra de los rivales por copa (no cambia la longitud de los circuitos)
+  const AI_K = { usa: 1.02, sam: 1.045, jpn: 1.03 };
+  TG.cupSpeed = (cup) => Math.round(cup.ai * (cup.aiK || 1));
   TG.CUPS.forEach((cup, ci) => {
     cup.index = ci;
+    cup.aiK = AI_K[cup.id] || 1;
     cup.tracks.forEach((t, ti) => {
       t.cup = ci; t.index = ti;
       t.maxCurve = cup.curve; t.maxHill = cup.hill;
@@ -971,6 +975,12 @@
     hard: { name: 'Difícil', off: 0.22, spd: 1.02 },
   };
   TG.raceLevel = (def) => U.clamp((def.cup * 4 + def.index) / 31, 0, 1);
+  // Piezas de los rivales: mejoran carrera a carrera a lo largo del campeonato
+  TG.aiUpgrades = (lvl) => ({
+    motor: Math.min(5, Math.floor(lvl * 5.4)),
+    turbo: Math.min(4, Math.floor(lvl * 4.4)),
+    tires: Math.min(4, Math.floor(lvl * 4.2)),
+  });
 
   TG.WEATHER_LABEL = { clear: 'Despejado', rain: 'Lluvia', snow: 'Nieve', fog: 'Niebla' };
   TG.TIME_LABEL = { day: 'Día', sunset: 'Atardecer', dusk: 'Anochecer', night: 'Noche', overcast: 'Nublado' };

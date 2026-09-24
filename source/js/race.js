@@ -7,6 +7,14 @@
   const INTRO = 2.6, COUNT = 3.0;
   const LANES = [-0.62, 0, 0.62];
 
+  // Altura mínima para que la carrocería no atraviese el suelo al girar sobre sí misma
+  function flipClear(ang) {
+    const th = -ang, c = Math.cos(th), s = Math.sin(th);
+    let lo = 0;
+    [[0.21, -0.1], [-0.21, -0.1], [0.13, 0.17], [-0.13, 0.17]].forEach((p) => { const y = p[0] * s + p[1] * c; if (y < lo) lo = y; });
+    return Math.max(0, -lo - 0.1);
+  }
+
   function makeCar(model, color, up, o) {
     const st = TG.carStats(model, up);
     return {
@@ -15,8 +23,9 @@
       profile: o.profile || 'solo', autopilot: !!o.autopilot, manual: !!o.manual,
       z: 0, x: 0, speed: 0, lapsDone: -1, finished: false, finishTime: 0, finishPos: 0, progress: 0, pos: 0,
       steer: 0, steerVis: 0, throttle: 0, braking: false, vx: 0, latV: 0, lastX: 0, lastSpeed: 0, lastThr: 0,
-      vis: { yaw: 0, roll: 0, rollV: 0, pitch: 0, pitchV: 0, heave: 0, heaveV: 0, steer: 0, blur: 0 },
+      vis: { yaw: 0, roll: 0, rollV: 0, pitch: 0, pitchV: 0, heave: 0, heaveV: 0, steer: 0, blur: 0, flipA: 0, flipLift: 0 },
       backfire: 0, shiftPuff: 0, burn: 0, bumpSmoke: 0,
+      dmg: { f: 0, r: 0, l: 0, rt: 0, roof: 0 }, dmgT: 0, flip: null, lostWing: false, brokenL: 0, scrapeT: 0, seed: Math.floor(Math.random() * 997),
       gear: 1, rpm: model.eng.idle, shiftT: 0,
       nitroN: st.nitroN, nitroT: 0, fuel: 100,
       offroad: false, crashT: 0, bumpT: 0, slip: 0, air: 0, airV: 0, draft: 0, spinT: 0, perfect: false,
@@ -62,22 +71,25 @@
       });
       const nAI = cfg.rivals || 0;
       const drivers = cfg.drivers || Race.makeDrivers(this.cup, nAI, def.seed);
-      const ref = (cfg.aiRef || this.cup.ai) * C.KMH;
+      const ref = (cfg.aiRef || TG.cupSpeed(this.cup)) * C.KMH;
       // dificultad: sube poco a poco con cada carrera del campeonato (0 = primera, 1 = última)
       const D = TG.DIFFICULTY[TG.Save.data.settings.difficulty] || TG.DIFFICULTY.normal;
       const lvl = this.demo ? 0.5 : U.clamp(TG.raceLevel(def) + D.off, 0, 1);
       this.level = lvl;
+      // los rivales también mejoran sus piezas (motor, turbo y neumáticos) según avanza el campeonato
+      const aiUp = TG.aiUpgrades(lvl);
+      this.aiUp = aiUp;
       drivers.slice(0, nAI).forEach((d, rank) => {
         const model = TG.CAR[d.carId];
-        const car = makeCar(model, d.color, {}, { name: d.name });
+        const car = makeCar(model, d.color, aiUp, { name: d.name });
         const skill = d.skill != null ? d.skill : 1 - rank / Math.max(1, nAI);
-        const vmax = ref * (0.87 + 0.13 * skill) * (0.972 + 0.052 * lvl) * D.spd * U.rand(0.992, 1.008) * (this.demo ? U.rand(0.8, 0.95) : 1);
+        const vmax = ref * (0.87 + 0.13 * skill) * (0.99 + 0.015 * lvl) * (1 + 0.014 * aiUp.motor) * D.spd * U.rand(0.992, 1.008) * (this.demo ? U.rand(0.8, 0.95) : 1);
         car.ai = {
-          vmax, tol: 3.0 + skill * 1.6 + lvl * 0.5, brakeK: 0.075 - lvl * 0.012, lane: 0, laneT: 0, jitter: U.rand(-0.05, 0.05), rubber: 1,
+          vmax, tol: 3.0 + skill * 1.6 + lvl * 0.5 + aiUp.tires * 0.1, brakeK: 0.075 - lvl * 0.012, lane: 0, laneT: 0, jitter: U.rand(-0.05, 0.05), rubber: 1,
           nitroN: (skill > 0.4 ? 2 : 1) + (lvl > 0.55 && skill > 0.3 ? 1 : 0), skill, did: d.id,
-          lvl, lat: 1,
+          lvl, vx: 0,
         };
-        car.st = Object.assign({}, car.st, { vmax, accel: (100 * C.KMH) / model.acc * 1.05 });
+        car.st = Object.assign({}, car.st, { vmax, accel: (100 * C.KMH) / model.acc * 1.05 * (1 + 0.05 * aiUp.turbo) });
         this.cars.push(car);
       });
       this.grid();
@@ -222,7 +234,7 @@
         v.yaw += (yawT - v.yaw) * ky;
         // ruedas delanteras: giran con la dirección (la IA también las gira en las curvas)
         const st = c.isPlayer ? c.steer : U.clamp(c.steerVis + seg.curve * sp * 0.09, -1, 1);
-        v.steer += (st * U.lerp(0.55, 0.34, Math.min(1, sp)) - v.steer) * ks;
+        v.steer += (st * U.lerp(0.5, 0.28, Math.min(1, sp)) - v.steer) * ks;
         // sin inclinación al girar: la suspensión solo reacciona a baches, saltos y golpes
         v.rollV += (-v.roll * 110 - v.rollV * 12) * dt;
         v.roll += v.rollV * dt;
@@ -236,9 +248,20 @@
         v.heaveV += (-v.heave * 160 - v.heaveV * 13) * dt;
         v.heave += v.heaveV * dt;
         v.heave = U.clamp(v.heave, -0.02, 0.02);
+        // vueltas de campana
+        if (c.flip) {
+          const f = c.flip, total = f.side * Math.PI * 2 * f.turns;
+          let ang = total, hop = 0;
+          if (f.t < f.air) { const u = f.t / f.air; ang = total * (1 - Math.pow(1 - u, 1.5)); hop = Math.sin(Math.PI * u) * (0.2 + 0.08 * f.turns); }
+          else if (f.roof && f.t - f.air > 1.3) { const u = U.clamp((f.t - f.air - 1.3) / 0.55, 0, 1); ang = total + f.side * Math.PI * U.smooth(u); hop = Math.sin(Math.PI * u) * 0.22; }
+          v.flipA = ang;
+          v.flipLift = hop + flipClear(ang);
+        } else if (v.flipA) { v.flipA = 0; v.flipLift = 0; }
         v.roll = U.clamp(v.roll, -0.1, 0.1);
         v.pitch = U.clamp(v.pitch, -0.06, 0.05);
-        v.blur = sp > 0.28 ? 1 : 0;
+        v.blur = U.clamp((sp - 0.12) / 0.45, 0, 1);
+        // giro de las ruedas: el dibujo avanza a la velocidad real hasta un límite legible (sin efecto estroboscópico)
+        v.wheelA = ((v.wheelA || 0) + Math.min(c.speed / 141, 17, 0.3 / dt) * dt) % (Math.PI * 2);
       }
     }
 
@@ -269,7 +292,9 @@
       if (!this.demo && this.phase === 'race' && this.players.every((p) => p.finished)) {
         this.phase = 'done'; this.phaseT = 0; this.emit('allFinished');
       }
-      if (this.phase === 'done' && this.phaseT > 3.6 && !this.ended) { this.ended = true; this.emit('end'); }
+      // tras la meta: tiempo para la vista panorámica 360° (se puede saltar con Intro)
+      const hold = this.demo || !TG.Finish ? 3.6 : TG.Finish.DELAY + TG.Finish.DUR + 0.8;
+      if (this.phase === 'done' && (this.phaseT > hold || this.skipFin) && !this.ended) { this.ended = true; this.emit('end'); }
     }
 
     idle(dt) {
@@ -303,6 +328,7 @@
       const T = this.track, st = car.st;
       const seg = T.findSegment(car.z);
       if (car.finished && !car.autopilot) car.autopilot = true;
+      if (car.flip) { this.stepFlip(car, dt); return; }
 
       // nitro y marchas manuales
       if (inp.nitro && car.nitroT <= 0 && car.nitroN > 0 && !car.finished) {
@@ -317,8 +343,9 @@
         if (inp.down && car.gear > 1) { car.gear--; car.shiftT = st.shift * 0.4; this.emit('shift', { car }); }
       }
 
-      const grip = st.grip * (this.gripW + (1 - this.gripW) * st.tires * 0.18);
-      let vmax = st.vmax;
+      const grip = st.grip * (this.gripW + (1 - this.gripW) * st.tires * 0.18) * (1 - 0.1 * car.dmgT);
+      // un coche dañado corre menos
+      let vmax = st.vmax * (1 - 0.2 * car.dmgT);
       if (car.nitroT > 0) vmax *= st.nitroPow;
       if (car.draft > 0.5) vmax *= 1.05;
 
@@ -334,6 +361,8 @@
       const drift = (seg.curve * sp * sp * C.CENTRI) / grip;
       // respuesta lateral inmediata y precisa: el coche va exactamente adonde apuntan las ruedas
       car.vx = car.steer * C.STEER * auth * crashK * (0.92 + 0.08 * grip) - drift;
+      // con la dirección tocada, el coche tira un poco hacia el lado dañado
+      car.vx += (car.dmg.rt - car.dmg.l) * 0.06 * Math.min(1, sp * 1.4);
       car.x += car.vx * dt;
       // derrape: cuando la curva pide casi todo el agarre, o al frenar fuerte girando
       const turning = Math.abs(car.steer);
@@ -363,6 +392,7 @@
         else if (rn < 0.4 && car.gear > 1) a *= 0.3 + rn;
         a *= 1.05;
       }
+      a *= 1 - 0.25 * car.dmgT;
       if (car.shiftT > 0) { car.shiftT -= dt; a *= 0.25; }
       if (car.fuel <= 0) a *= 0.28;
       if (car.nitroT > 0) a *= 2.1;
@@ -470,11 +500,37 @@
       return best ? { car: best, dz: bd } : null;
     }
 
+    // ¿Hay alguien en el carril (o en el camino hasta él) cerca de este coche?
+    laneBlocked(car, lane, back, front) {
+      const L = this.track.length, W = C.CAR_W * 1.08;
+      const dir = Math.sign(lane - car.x) || 1;
+      for (let i = 0; i < this.cars.length; i++) {
+        const o = this.cars[i];
+        if (o === car) continue;
+        let dz = o.z - car.z;
+        if (dz < -L / 2) dz += L; else if (dz > L / 2) dz -= L;
+        // un coche más rápido que se acerca por detrás también cuenta; con el jugador, margen extra
+        const reach = o.speed > car.speed ? Math.min(12 * C.SEG, (o.speed - car.speed) * 2.5) : 0;
+        const bk = o.isPlayer ? back * 1.8 : back;
+        if (dz < -bk - reach || dz > front) continue;
+        if (Math.abs(o.x - lane) < W) return true;
+        // cerca: nadie en el pasillo entre su carril y el nuevo (el que va delante en su carril no cuenta)
+        if (Math.abs(dz) < 4 * C.SEG) { const k = (o.x - car.x) * dir; if (k > W * 0.6 && (o.x - lane) * dir < W) return true; }
+      }
+      return false;
+    }
+
+    // carril libre: los rivales son prudentes (no cierran el paso); el piloto automático del jugador, más decidido
     freeLane(car) {
       const L = this.track.length;
       const opts = LANES.slice().sort((a, b) => Math.abs(a - car.x) - Math.abs(b - car.x));
       for (const lane of opts) {
         if (Math.abs(lane - car.x) < 0.2) continue;
+        if (car.ai) {
+          if (Math.abs(lane - car.x) > 0.75) continue;
+          if (!this.laneBlocked(car, lane, 4 * C.SEG, 6 * C.SEG)) return lane;
+          continue;
+        }
         let ok = true;
         for (let i = 0; i < this.cars.length && ok; i++) {
           const o = this.cars[i];
@@ -489,6 +545,7 @@
     }
 
     stepAI(car, dt) {
+      if (car.flip) { this.stepFlip(car, dt); return; }
       const T = this.track, ai = car.ai, st = car.st;
       const seg = T.findSegment(car.z);
       const look = 12 + Math.floor((car.speed / C.SEG) * 0.9);
@@ -499,29 +556,35 @@
       const tol = ai.tol + (this.gripW < 1 ? (snow ? -0.9 : -0.6) : 0);
       if (maxC > tol) target *= Math.max(0.55, 1 - (maxC - tol) * ai.brakeK);
       if (this.gripW < 1) target *= snow ? 0.965 : 0.982;
-      target *= ai.rubber;
+      target *= ai.rubber * (1 - 0.15 * car.dmgT);
       if (car.nitroT > 0) target *= 1.14;
       if (car.finished) target *= 0.85;
       ai.laneT -= dt;
-      const ahead = this.nearestAhead(car, 8 * C.SEG, C.CAR_W * 1.1);
+      const ahead = this.nearestAhead(car, 7 * C.SEG, C.CAR_W * 1.1);
       if (ahead) {
-        if (ai.laneT <= 0 && ahead.car.speed < car.speed * 1.02) {
+        // solo cambia de carril si de verdad le frena un coche más lento, y sin prisas
+        if (ai.laneT <= 0 && ahead.car.speed < car.speed * 0.985) {
           const lane = this.freeLane(car);
-          if (lane != null) { ai.lane = lane; ai.laneT = 1.3 + Math.random(); }
-          else ai.laneT = 0.4;
+          if (lane != null) { ai.lane = lane; ai.laneT = 3.5 + Math.random() * 2.5; }
+          else ai.laneT = 0.8;
         }
         if (ahead.dz < 3.5 * C.SEG && Math.abs(ahead.car.x - car.x) < C.CAR_W * 0.98) target = Math.min(target, ahead.car.speed * 0.98);
       }
+      // si alguien se mete en el carril a mitad de la maniobra, se queda donde está
+      if (Math.abs(ai.lane - car.x) > 0.08 && this.laneBlocked(car, ai.lane, 2 * C.SEG, 3 * C.SEG)) ai.lane = car.x;
       const a = st.accel * Math.max(0.06, 1 - Math.pow(car.speed / (ai.vmax * 1.25), 2));
       if (car.speed < target) car.speed = Math.min(target, car.speed + a * dt);
       else car.speed = Math.max(target, car.speed - st.vmax * 0.55 * dt);
       car.braking = car.speed > target + 40 || target < ai.vmax * ai.rubber * 0.9;
       car.throttle = car.speed < target - 20 ? 1 : 0.35;
+      // desplazamiento lateral suave (curva en S de unos 2 s por carril)
       const tx = U.clamp(ai.lane + ai.jitter, -0.8, 0.8);
       const dx = tx - car.x;
-      const mv = Math.sign(dx) * Math.min(Math.abs(dx), ai.lat * dt);
-      car.x += mv;
-      car.steerVis = U.approach(car.steerVis, U.clamp(dx * 4, -1, 1), dt * 5);
+      const want = U.clamp(dx * 1.8, -0.4, 0.4);
+      ai.vx = U.approach(ai.vx, want, 1.2 * dt);
+      if (Math.abs(dx) < 0.004 && Math.abs(ai.vx) < 0.02) ai.vx = 0;
+      car.x += ai.vx * dt;
+      car.steerVis = U.clamp(ai.vx / 0.4, -1, 1) * 0.5;
       if (ai.nitroN > 0 && this.phase === 'race' && car.lapsDone >= 1 && maxC < 1 && car.speed > ai.vmax * 0.8 && Math.random() < dt * 0.08) {
         ai.nitroN--; car.nitroT = 2.2;
       }
@@ -588,8 +651,12 @@
         for (let j = 0; j < seg.sprites.length; j++) {
           const sp = seg.sprites[j];
           const def = this.sprites[sp.name];
-          if (!def || !def.col) continue;
-          if (this.spriteHit(def, sp, car.x)) { this.crash(car, sp, def); return; }
+          if (!def || !def.col || sp.broken) continue;
+          if (this.spriteHit(def, sp, car.x)) {
+            if (def.brk) this.smash(car, seg, sp, def);
+            else this.crash(car, sp, def);
+            return;
+          }
         }
       }
     }
@@ -598,6 +665,17 @@
       const st = car.st;
       const soft = !!def.soft;
       const before = car.speed;
+      const s = before / st.vmax;
+      // daños según la fuerza del golpe y el lado del coche que choca
+      const side = sp.offset > 0 ? 'rt' : 'l';
+      this.damage(car, side, (soft ? 0.04 : 0.1) + s * (soft ? 0.1 : 0.32));
+      if (!soft) this.damage(car, 'f', s * 0.2);
+      // vuelco: solo en impactos muy fuertes contra objetos sólidos
+      if (!soft && !car.flip && s > 0.64 && Math.random() < U.clamp((s - 0.64) / 0.3, 0, 1) * 0.75) {
+        this.emit('crash', { car, soft: false, strength: s });
+        this.rollover(car, sp.offset > 0 ? -1 : 1, s);
+        return;
+      }
       if (soft) car.speed *= 0.55;
       else car.speed = Math.min(car.speed, st.vmax * (0.1 + (1 - st.crash) * 0.5));
       car.crashT = 0.6;
@@ -608,7 +686,70 @@
       car.vis.rollV += dir * (soft ? 0.25 : 0.8);
       car.nitroT = 0;
       if (!soft && before > st.vmax * 0.25) car.crashes++;
-      this.emit('crash', { car, soft, strength: before / st.vmax });
+      this.emit('crash', { car, soft, strength: s });
+    }
+
+    // Objetos que se rompen o se caen al chocar (farolas, señales, vallas, neumáticos...)
+    smash(car, seg, sp, def) {
+      const s = car.speed / car.st.vmax;
+      sp.broken = { t: this.time, dir: Math.sign(sp.offset) || 1, kind: def.brk };
+      car.speed *= def.brk === 'fall' ? 0.8 : 0.88;
+      car.crashT = 0.2;
+      car.vis.heaveV += 0.03;
+      car.vis.rollV += (sp.offset > 0 ? -1 : 1) * 0.2;
+      this.damage(car, sp.offset > 0 ? 'rt' : 'l', 0.03 + s * 0.08);
+      this.damage(car, 'f', s * 0.05);
+      if (s > 0.25) car.crashes++;
+      this.emit('smash', { car, seg, sp, def, strength: s });
+    }
+
+    // Daños por zonas (0..1): delante, detrás, izquierda, derecha y techo
+    damage(car, zone, amount) {
+      if (!(amount > 0) || car.ghost || this.demo) return;
+      const d = car.dmg;
+      const k = car.isPlayer ? 0.55 + 0.45 * car.st.crash : 0.8; // el chasis mejorado absorbe más
+      d[zone] = Math.min(1, d[zone] + amount * k);
+      const mx = Math.max(d.f, d.r, d.l, d.rt, d.roof);
+      car.dmgT = Math.min(1, mx * 0.55 + (d.f + d.r + d.l + d.rt + d.roof) * 0.14);
+      // piezas que se rompen
+      if (!car.brokenL && d.r > 0.32) car.brokenL = d.l >= d.rt ? 1 : 2;
+      if (d.r > 0.7) car.brokenL = 3;
+      const w = car.model.side.wing;
+      if (!car.lostWing && d.r > 0.55 && w && !w.flush) { car.lostWing = true; this.emit('part', { car, part: 'wing' }); }
+    }
+
+    // Vuelco: da vueltas de campana y, si queda boca abajo, se recoloca en la pista
+    rollover(car, side, s) {
+      const r = Math.random();
+      const turns = r < 0.55 ? 1 : r < 0.82 ? 2 : 1.5;
+      car.flip = { t: 0, air: 0.8 + 0.28 * turns, turns, side, roof: turns % 1 !== 0, landed: false };
+      car.crashT = 0; car.nitroT = 0; car.draft = 0; car.slip = 0;
+      car.speed = Math.min(car.speed, car.st.vmax * 0.75);
+      this.damage(car, 'roof', 0.28 + 0.3 * s);
+      this.damage(car, side > 0 ? 'rt' : 'l', 0.22);
+      this.damage(car, 'f', 0.1);
+      this.damage(car, 'r', 0.1);
+      if (car.isPlayer) car.crashes++;
+      this.emit('rollover', { car });
+    }
+
+    stepFlip(car, dt) {
+      const f = car.flip, T = this.track;
+      f.t += dt;
+      const air = f.t < f.air;
+      car.speed = Math.max(0, car.speed - (air ? 0.3 : 1.2) * car.st.vmax * dt);
+      car.x = U.clamp(car.x + f.side * (air ? 0.35 : 0.06) * dt, -1.5, 1.5);
+      car.throttle = 0; car.braking = false; car.nitroT = 0; car.slip = 0; car.draft = 0;
+      car.rpm = U.approach(car.rpm, car.model.eng.idle, 4000 * dt);
+      if (!air && !f.landed) { f.landed = true; this.emit('flipLand', { car, roof: f.roof }); }
+      if (f.t >= f.air + (f.roof ? 1.9 : 0.5)) {
+        car.flip = null; car.crashT = 0.5; car.gear = 1; car.vis.heaveV += 0.06;
+        if (car.ai) { car.ai.lane = U.clamp(car.x, -0.62, 0.62); car.ai.vx = 0; car.ai.laneT = 2; }
+        this.emit('recover', { car });
+      }
+      const oldZ = car.z;
+      car.z = U.increase(car.z, car.speed * dt, T.length);
+      if (car.z < oldZ && car.speed > 0) this.lapCross(car);
     }
 
     pickupCheck(car, oldZ) {
@@ -634,6 +775,7 @@
       const L = this.track.length, CW = C.CAR_W * 0.92, CL = C.CAR_LEN;
       for (const p of this.players) {
         if (p.bumpT > 0) p.bumpT -= dt;
+        if (p.scrapeT > 0) p.scrapeT -= dt;
         for (let i = 0; i < this.cars.length; i++) {
           const o = this.cars[i];
           if (o === p) continue;
@@ -643,22 +785,39 @@
           const dx = o.x - p.x;
           if (Math.abs(dx) > CW) continue;
           if (dz > 0 && p.speed > o.speed) {
-            const dv = p.speed - o.speed;
+            const dv = p.speed - o.speed, hs = dv / p.st.vmax;
             p.speed = Math.max(0, o.speed * 0.95 - dv * 0.05);
             o.speed += dv * 0.35;
-            if (p.bumpT <= 0) { this.emit('bump', { car: p, other: o, strength: dv / p.st.vmax }); p.bumpT = 0.35; }
+            if (p.bumpT <= 0) {
+              this.damage(p, 'f', 0.03 + hs * 0.5);
+              this.damage(o, 'r', 0.03 + hs * 0.5);
+              // golpe fuerte en una esquina trasera: el otro coche puede volcar
+              if (hs > 0.3 && Math.abs(dx) > CW * 0.4 && !o.flip && Math.random() < (hs - 0.3) * 1.8) this.rollover(o, dx > 0 ? 1 : -1, hs);
+              this.emit('bump', { car: p, other: o, strength: hs }); p.bumpT = 0.35;
+            }
           } else if (dz <= 0 && o.speed > p.speed) {
-            const dv = o.speed - p.speed;
+            const dv = o.speed - p.speed, hs = dv / p.st.vmax;
             o.speed = p.speed * 0.96;
             p.speed += dv * 0.3;
-            if (p.bumpT <= 0) { this.emit('bump', { car: p, other: o, strength: (dv / p.st.vmax) * 0.6 }); p.bumpT = 0.35; }
+            if (p.bumpT <= 0) {
+              this.damage(p, 'r', 0.03 + hs * 0.5);
+              this.damage(o, 'f', 0.03 + hs * 0.5);
+              if (hs > 0.3 && Math.abs(dx) > CW * 0.4 && !p.flip && Math.random() < (hs - 0.3) * 1.8) this.rollover(p, dx > 0 ? -1 : 1, hs);
+              this.emit('bump', { car: p, other: o, strength: hs * 0.6 }); p.bumpT = 0.35;
+            }
+          }
+          // roce lateral: arañazos en los costados
+          if (p.scrapeT <= 0 && Math.abs(dz) < CL * 0.8) {
+            this.damage(p, dx > 0 ? 'rt' : 'l', 0.022);
+            this.damage(o, dx > 0 ? 'l' : 'rt', 0.022);
+            p.scrapeT = 0.3;
           }
           const push = (CW - Math.abs(dx)) * 0.5 + 0.005;
           const s = dx >= 0 ? -1 : 1;
           p.x += s * push;
           o.x -= s * push;
           if (p.bumpT > 0.3) { p.vis.rollV += s * 0.35; o.vis.rollV -= s * 0.35; o.bumpSmoke = Math.max(o.bumpSmoke, 0.7); }
-          if (o.ai) { o.ai.lane = U.clamp(o.x - s * 0.1, -0.7, 0.7); o.ai.laneT = 0.8; }
+          if (o.ai) { o.ai.lane = U.clamp(o.x - s * 0.1, -0.7, 0.7); o.ai.laneT = 1.5; o.ai.vx = 0; }
         }
       }
     }

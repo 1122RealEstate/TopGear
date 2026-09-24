@@ -119,6 +119,8 @@
     if (car.manual) txt(ctx, 'MAN', gx, gy + r * 0.3, font(700, r * 0.1, F_DATA), GULF, 'center', 'middle');
   }
   const R_t = () => (TG.Render ? TG.Render.t : 0);
+  // color según el daño: verde → amarillo → naranja → rojo
+  const dmgCol = (v) => (v < 0.15 ? '#46d98a' : v < 0.4 ? '#ffd21f' : v < 0.7 ? '#ff8a2a' : '#ff3b3b');
 
   HUD.draw = function (ctx, race, v, vw, vh, dt) {
     const p = v.player;
@@ -209,6 +211,25 @@
         ctx.fillStyle = 'rgba(255,255,255,0.12)'; U.rr(ctx, gx0, fy - 11 * s, gw, 12 * s, 4 * s); ctx.fill();
         const fcol = p.fuel < 20 ? SIGNAL : p.fuel < 45 ? '#ffd21f' : '#46d98a';
         ctx.fillStyle = fcol; U.rr(ctx, gx0, fy - 11 * s, Math.max(4 * s, gw * (p.fuel / 100)), 12 * s, 4 * s); ctx.fill();
+      }
+
+      // --- daños: silueta del coche vista desde arriba con cada zona coloreada
+      if (!race.demo && p.dmgT > 0.005) {
+        const dh = (split ? 38 : 44) * s, dy = by - dh - 8 * s;
+        ctx.fillStyle = 'rgba(12,14,20,0.62)';
+        U.rr(ctx, bx, dy, bw, dh, 8 * s); ctx.fill();
+        txt(ctx, 'DAÑOS', bx + 14 * s, dy + dh / 2 + 5 * s, font(700, 13 * s, F_DATA), 'rgba(243,245,248,0.6)');
+        const pct = Math.round(p.dmgT * 100);
+        txt(ctx, pct + '%', bx + bw - 14 * s, dy + dh / 2 + 7 * s, font(700, 20 * s, F_DATA), dmgCol(p.dmgT), 'right');
+        // coche en planta (el morro hacia arriba)
+        const cw = 16 * s, chh = dh - 12 * s, ccx = bx + 88 * s, ccy = dy + 6 * s;
+        const d = p.dmg;
+        ctx.fillStyle = 'rgba(255,255,255,0.1)'; U.rr(ctx, ccx - cw / 2, ccy, cw, chh, 5 * s); ctx.fill();
+        ctx.fillStyle = dmgCol(d.f); U.rr(ctx, ccx - cw / 2 + 2 * s, ccy + 1 * s, cw - 4 * s, chh * 0.22, 3 * s); ctx.fill();
+        ctx.fillStyle = dmgCol(d.r); U.rr(ctx, ccx - cw / 2 + 2 * s, ccy + chh * 0.77, cw - 4 * s, chh * 0.22, 3 * s); ctx.fill();
+        ctx.fillStyle = dmgCol(d.l); ctx.fillRect(ccx - cw / 2 - 1 * s, ccy + chh * 0.26, 3 * s, chh * 0.48);
+        ctx.fillStyle = dmgCol(d.rt); ctx.fillRect(ccx + cw / 2 - 2 * s, ccy + chh * 0.26, 3 * s, chh * 0.48);
+        ctx.fillStyle = dmgCol(d.roof); U.rr(ctx, ccx - cw * 0.28, ccy + chh * 0.34, cw * 0.56, chh * 0.32, 2 * s); ctx.fill();
       }
 
       // --- minimapa

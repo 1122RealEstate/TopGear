@@ -37,12 +37,24 @@
 
   R.prepCar = function (race, car) {
     const q = R.qScale();
+    const CG = TG.CarGL;
+    if (CG && CG.has(car.model.id)) {
+      // modelo 3D hecho en Blender (WebGL)
+      const inf = CG.info(car.model.id);
+      const exh = [];
+      inf.exh.forEach((e) => { [1, -1].forEach((sd) => { if (sd < 0 && Math.abs(e[0]) < 0.01) return; exh.push({ x: (sd * e[0] * CAR_UNITS) / C.ROAD_W, h: e[1] * CAR_UNITS }); }); });
+      car.gl = { colors: CG.colors(car.model, car.color) };
+      car.c3 = { tex: null, frames: new Map(), exh, wheelX: (inf.wheelX * CAR_UNITS) / C.ROAD_W, rearZ: inf.rearZ * CAR_UNITS, frontZ: inf.frontZ * CAR_UNITS };
+      R.carFrame(car, 0, true);
+      return;
+    }
+    car.gl = null;
     const g = C3.geometry(car.model);
     const tex = C3.textures(car.model, car.color, race.theme, car.isPlayer ? 380 + 520 * q : 170 + 200 * q);
     const dc = tex.decal;
     const sX = g.hwTail / dc.bw2, sY = g.yTail / (dc.GY - dc.yDeck);
     car.c3 = {
-      tex, frames: new Map(),
+      tex, frames: new Map(), wr: g.wr,
       exh: dc.exh.map((e) => ({ x: ((e[0] - dc.cx) * sX * CAR_UNITS) / C.ROAD_W, h: (dc.GY - e[1]) * sY * CAR_UNITS })),
       wheelX: (Math.abs(g.wheels[2].x) * CAR_UNITS) / C.ROAD_W,
       rearZ: g.wheels[2].z * CAR_UNITS,
@@ -52,20 +64,35 @@
   };
 
   // Imagen cacheada del coche para una guiñada (coches pequeños en pantalla)
-  R.carFrame = function (car, idx, force) {
+  R.carFrame = function (car, idx, force, sk) {
     const fr = car.c3.frames;
-    let f = fr.get(idx);
+    // modelos GL: otra imagen si cambia mucho el daño o pierde el alerón
+    const vk = car.gl ? (car.lostWing ? 1 : 0) + 2 * Math.round((car.dmgT || 0) * 2) : 0;
+    const key = idx * 4 + (sk || 0) + vk * 100;
+    let f = fr.get(key);
     if (f) return f;
     if (!force && R.sprBudget <= 0) {
+      if (sk && fr.has(idx * 4)) return fr.get(idx * 4);
       for (let d = 1; d <= YAW_MAX * 2; d++) {
-        const a = idx - Math.sign(idx) * d, b = idx + Math.sign(idx) * d;
+        const a = (idx - Math.sign(idx || 1) * d) * 4, b = (idx + Math.sign(idx || 1) * d) * 4;
         if (fr.has(a)) return fr.get(a);
         if (fr.has(b)) return fr.get(b);
       }
     }
     R.sprBudget--;
-    f = C3.sprite(car.model, car.c3.tex, car.c3.env || R.env, idx * YAW_STEP, R.sprPPL * (car.ghost ? 2.6 : 1), SPR_PITCH, SPR_DIST);
-    fr.set(idx, f);
+    const env = car.c3.env || R.env, ppl = R.sprPPL * (car.ghost ? 2.6 : 1);
+    if (car.gl) {
+      const pose = { yaw: idx * YAW_STEP, roll: 0, pitch: 0, heave: 0, steer: (sk || 0) * 0.3, spin: 0,
+        dmg: vk > 1 ? car.dmg : null, seed: car.seed, noWing: car.lostWing };
+      const sh = car.ghost ? 0 : 0.62;
+      const view = { ppl, pitch: SPR_PITCH, dist: SPR_DIST, lod: 1, shadow: sh };
+      const bounds = sh ? C3.draw(null, car.model, null, env, pose, Object.assign({ x: 0, y: 0, boundsOnly: true }, view)) : null;
+      f = TG.CarGL.sprite(car.model.id, car.gl.colors, env, pose, ppl, SPR_PITCH, SPR_DIST, {
+        shadow: car.ghost ? 0 : 0.55, night: !!env.night, bounds,
+        under: sh ? (c, ax, ay) => C3.draw(c, car.model, null, env, pose, Object.assign({ x: ax, y: ay, shadowOnly: true }, view)) : null,
+      });
+    } else f = C3.sprite(car.model, car.c3.tex, env, idx * YAW_STEP, ppl, SPR_PITCH, SPR_DIST, (sk || 0) * 0.3);
+    fr.set(key, f);
     return f;
   };
 
@@ -177,11 +204,11 @@
     }
   };
 
-  R.sprite = function (ctx, def, x, y, w, h, clipY, fogA) {
+  R.sprite = function (ctx, def, x, y, w, h, clipY, fogA, alt) {
     let clipH = 0;
     if (y + h > clipY) clipH = y + h - clipY;
     if (clipH >= h) return false;
-    const img = def.img;
+    const img = alt || def.img;
     const k = 1 - clipH / h;
     ctx.drawImage(img, 0, 0, img.width, img.height * k, x, y, w, h - clipH);
     if (fogA > 0.04 && def.sil) {
@@ -256,6 +283,16 @@
     ctx.save();
     ctx.beginPath(); ctx.rect(vx, vy, vw, vh); ctx.clip();
     ctx.translate(vx, vy);
+    // al cruzar la meta: vista panorámica 360° alrededor del coche
+    if (p.finished && !race.demo && TG.Finish) {
+      v.fin = v.fin || { t: 0 };
+      v.fin.t += dt;
+      if (v.fin.t >= TG.Finish.DELAY) {
+        TG.Finish.draw(ctx, race, v, vw, vh, dt);
+        ctx.restore();
+        return;
+      }
+    }
     ctx.save();
     if (cam.shake > 0) ctx.translate((Math.random() - 0.5) * cam.shake * vh * 0.018, (Math.random() - 0.5) * cam.shake * vh * 0.018);
 
@@ -312,7 +349,25 @@
         const sx = s1.x + scale * sp.offset * RW * K - w * ax;
         if (sx > vw || sx + w < 0) continue;
         const sy = s1.y - h;
-        const full = R.sprite(ctx, def, sx, sy, w, h, seg.clip, fogA);
+        if (sp.broken) {
+          // objeto derribado: cae hacia fuera de la carretera y queda tumbado; los rotos desaparecen (sus trozos vuelan)
+          if (sp.broken.kind !== 'fall' || n < 4) continue;
+          const k = U.clamp((race.time - sp.broken.t) / 0.7, 0, 1);
+          const ang = sp.broken.dir * (k * k * 1.42 - Math.sin(k * Math.PI) * 0.02);
+          const col = def.col && def.col[0] ? (def.col[0][0] + def.col[0][1]) / 2 : 0.5;
+          const bx = sx + w * col, by = s1.y;
+          if (by - h * 0.1 > seg.clip) continue;
+          ctx.save();
+          ctx.beginPath(); ctx.rect(-vw, -vh, vw * 3, seg.clip + vh); ctx.clip();
+          ctx.translate(bx, by); ctx.rotate(ang);
+          ctx.globalAlpha = (1 - fogA * 0.6) * U.clamp((n - 4) / 5, 0, 1);
+          ctx.drawImage(def.img, -w * col, -h, w, h);
+          ctx.restore();
+          ctx.globalAlpha = 1;
+          continue;
+        }
+        const anim = def.img2 && ((R.t * (def.fps || 2.4) + (sp.ph || 0)) % 2) >= 1 ? def.img2 : null;
+        const full = R.sprite(ctx, def, sx, sy, w, h, seg.clip, fogA, anim);
         if (lampsOn && def.light && full && fogA < 0.9) {
           ctx.globalCompositeOperation = 'lighter';
           for (let j = 0; j < def.light.length; j++) {
@@ -372,9 +427,8 @@
         const vis = car.vis || ZV;
         // el coche propio lo manda su rumbo (morro hacia donde se gira); la perspectiva lateral apenas influye
         const own = car === p;
-        // tu coche va siempre recto (solo giran las ruedas); los demás siguen la curva y la perspectiva, con moderación
-        const yaw = own ? U.clamp(Math.atan(seg.dxv / C.SEG) * 0.25 + vis.yaw, -0.12, 0.12)
-          : U.clamp(Math.atan(seg.dxv / C.SEG) * 0.9 + vis.yaw - Math.atan((cxs - vw / 2) / dK) * 0.55, -0.3, 0.3);
+        // todos los coches van rectos: al doblar solo giran las ruedas delanteras
+        const yaw = U.clamp(vis.yaw, own ? -0.12 : -0.03, own ? 0.12 : 0.03);
         const ratio = Math.max(0, (ry - horizon) / dK);
         R.car(ctx, race, v, car, cxs, ry, sc * K, seg.clip, fogA, own, night, wet, vw, horizon, yaw,
           U.clamp(0.04 + 0.17 * ratio, 0.04, 0.19), 2.6 + 2.8 * Math.max(0, 1 - ratio));
@@ -484,23 +538,43 @@
     }
     const needClip = cy + 2 > clipY;
     if (needClip) { ctx.save(); ctx.beginPath(); ctx.rect(-10, -10, vw + 20, clipY + 10); ctx.clip(); }
-    const live = isView || (!car.ghost && R.liveLeft > 0 && wpx > R.sprW);
+    const glFast = !!car.gl && TG.CarGL.fast;
+    const live = isView || glFast || (!car.ghost && R.liveLeft > 0 && wpx > R.sprW);
     let lights, exh, s = 1, lx = 0, ly = 0;
-    if (live) {
+    // sombra proyectada según el sol también para los modelos de Blender (la suya queda como sombra de contacto)
+    if (live && car.gl && !car.ghost) {
+      C3.draw(ctx, car.model, null, race.env3d,
+        { yaw, roll: vis.roll + (vis.flipA || 0), pitch: vis.pitch, heave: vis.heave, steer: vis.steer, rigid: !!car.flip },
+        { x: cx, y: cy, ppl, pitch: cpitch, dist: cdist, lift: lift + (vis.flipLift || 0) * ppl, alpha, lod: 1, shadowOnly: true,
+          shadow: 0.62 * (1 - Math.min(0.6, car.air / 500 + (vis.flipLift || 0) * 2)) });
+    }
+    if (live && car.gl) {
+      if (!isView && !glFast) R.liveLeft--;
+      const shake = isView && car.crashT > 0 ? Math.sin(R.t * 50) * 0.02 : 0;
+      const m = TG.CarGL.drawCar(ctx, car.model.id, car.gl.colors, race.env3d,
+        { yaw: yaw + shake, roll: vis.roll + (vis.flipA || 0), pitch: vis.pitch, heave: vis.heave, steer: vis.steer, spin: vis.wheelA || 0, rigid: !!car.flip,
+          dmg: car.dmg, seed: car.seed, noWing: car.lostWing },
+        { x: cx, y: cy, ppl, pitch: cpitch, dist: cdist, lift: lift + (vis.flipLift || 0) * ppl },
+        { alpha, shadow: car.ghost ? 0 : 0.55 * (1 - Math.min(0.6, car.air / 500 + (vis.flipLift || 0) * 2)), brake: car.braking, night });
+      lights = m.lights; exh = m.exh;
+      if (isView) v.carScreen = { x: cx, y: cy - lift, w: wpx, h: ppl * 0.3, exh };
+    } else if (live) {
       if (!isView) R.liveLeft--;
       const shake = isView && car.crashT > 0 ? Math.sin(R.t * 50) * 0.02 : 0;
       const m = C3.draw(ctx, car.model, car.c3.tex, race.env3d,
-        { yaw: yaw + shake, roll: vis.roll, pitch: vis.pitch, heave: vis.heave, steer: vis.steer, blur: vis.blur },
-        { x: cx, y: cy, ppl, pitch: cpitch, dist: cdist, lift, alpha, lod: isView ? 0 : 1, shadow: car.ghost ? 0 : 0.62 * (1 - Math.min(0.6, car.air / 500)) });
+        { yaw: yaw + shake, roll: vis.roll + (vis.flipA || 0), pitch: vis.pitch, heave: vis.heave, steer: vis.steer, blur: vis.blur, spin: vis.wheelA || 0,
+          dmg: car.dmg, seed: car.seed, noWing: car.lostWing, rigid: !!car.flip },
+        { x: cx, y: cy, ppl, pitch: cpitch, dist: cdist, lift: lift + (vis.flipLift || 0) * ppl, alpha, lod: isView ? 0 : 1,
+          shadow: car.ghost ? 0 : 0.62 * (1 - Math.min(0.6, car.air / 500 + (vis.flipLift || 0) * 2)) });
       lights = m.lights; exh = m.exh;
       if (isView) v.carScreen = { x: cx, y: cy - lift, w: wpx, h: ppl * 0.3, exh };
     } else {
       const idx = U.clamp(Math.round(yaw / YAW_STEP), -YAW_MAX, YAW_MAX);
-      const f = R.carFrame(car, idx);
+      const f = R.carFrame(car, idx, false, Math.abs(vis.steer) > 0.08 ? Math.sign(vis.steer) : 0);
       s = ppl / f.ppl;
       lx = cx; ly = cy - lift;
       ctx.globalAlpha = alpha;
-      const rot = vis.roll * 0.7;
+      const rot = vis.roll * 0.5;
       if (rot) {
         ctx.save(); ctx.translate(lx, ly); ctx.rotate(rot);
         ctx.drawImage(f.img, -f.ax * s, -f.ay * s, f.img.width * s, f.img.height * s);
@@ -513,13 +587,14 @@
     if (car.ghost || cy - ppl * 0.12 > clipY) return;
     const P = (L) => (live ? L : [lx + L[0] * s, ly + L[1] * s, L[2] * s]);
     // luces traseras / freno
-    const brake = car.braking;
+    const brake = car.braking && !car.flip;
     if (night || brake) {
       ctx.globalCompositeOperation = 'lighter';
       const g = Art.glow('#ff2438');
       const a0 = (brake ? 0.95 : 0.5) * alpha;
       for (let i = 0; i < lights.length; i++) {
         const Lt = P(lights[i]);
+        if (car.brokenL && (car.brokenL === 3 || (car.brokenL === 1) === (Lt[0] < cx))) continue; // piloto roto
         const r = Lt[2] * (brake ? 2.6 : 1.8);
         ctx.globalAlpha = a0;
         ctx.drawImage(g, Lt[0] - r, Lt[1] - r, r * 2, r * 2);
@@ -530,6 +605,22 @@
       }
       ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = 'source-over';
+    }
+    // pilotos traseros rotos: cristal oscuro y agrietado
+    if (car.brokenL && !car.flip && wpx > 40) {
+      ctx.fillStyle = 'rgba(20,6,8,0.78)';
+      ctx.strokeStyle = 'rgba(230,230,235,0.5)';
+      ctx.lineWidth = Math.max(0.6, wpx * 0.004);
+      for (let i = 0; i < lights.length; i++) {
+        const Lt = P(lights[i]);
+        if (!(car.brokenL === 3 || (car.brokenL === 1) === (Lt[0] < cx))) continue;
+        const r = Math.max(1.5, Lt[2] * 0.55);
+        ctx.beginPath(); ctx.arc(Lt[0], Lt[1], r, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(Lt[0] - r * 0.8, Lt[1] - r * 0.3); ctx.lineTo(Lt[0] + r * 0.2, Lt[1] + r * 0.1); ctx.lineTo(Lt[0] + r * 0.7, Lt[1] - r * 0.6);
+        ctx.moveTo(Lt[0] + r * 0.2, Lt[1] + r * 0.1); ctx.lineTo(Lt[0] - r * 0.1, Lt[1] + r * 0.8);
+        ctx.stroke();
+      }
     }
     // llamas: nitro (azul) y petardeo (naranja)
     const bf = car.backfire > 0;
@@ -552,6 +643,49 @@
 
   /* ---------- Humo y polvo en el mundo (perspectiva real) ---------- */
   R.partCap = () => ({ low: 140, medium: 240, high: 360, ultra: 480 }[R.quality()] || 360);
+  const FRONT_ENGINE = { mustang: 1, gtr: 1, vantage: 1, amggt: 1 };
+  // Objeto destrozado: sus trozos salen despedidos (o polvo y chispas si solo se cae)
+  R.smash = function (race, e) {
+    if (!race.fx) return;
+    const def = e.def, sp = e.sp, car = e.car;
+    const RW = C.ROAD_W;
+    const w = def.w, h = w * def.aspect;
+    const ax = def.ax != null ? def.ax : sp.offset < 0 ? 1 : 0;
+    const left = sp.offset * RW - ax * w;
+    const z0 = e.seg.index * C.SEG + C.SEG * 0.5;
+    const img = def.img, n = def.brk === 'shatter' ? 4 : 2;
+    const cols = def.brk === 'shatter' ? n : 1;
+    for (let gx = 0; gx < cols; gx++) {
+      for (let gy = 0; gy < n; gy++) {
+        if (def.brk === 'fall' && gy < n - 1) continue;
+        const cw = w / cols, ch = h / n;
+        const xw = left + (gx + 0.5) * cw;
+        R.puff(race, {
+          k: 'd', img, ix: (gx * img.width) / cols, iy: (gy * img.height) / n, iw: img.width / cols, ih: img.height / n, asp: ch / cw,
+          z: z0 + U.rand(-60, 60), x: xw / RW, h: h - (gy + 0.5) * ch,
+          vz: car.speed * U.rand(0.35, 0.8), vx: (Math.sign(sp.offset) || 1) * U.rand(0.05, 0.9) + (car.x > sp.offset ? -0.2 : 0.2),
+          vh: U.rand(500, 1500), s: cw, gs: 0, life: U.rand(2.4, 3.4), rot: 0, spin: U.rand(-9, 9), c: '#fff', a: 1, drag: 0,
+        });
+      }
+    }
+    for (let i = 0; i < 6; i++) {
+      R.puff(race, { k: 's', z: z0, x: sp.offset + U.rand(-0.1, 0.1), h: U.rand(40, 300), vz: car.speed * U.rand(0.3, 0.6), vx: U.rand(-0.3, 0.3), vh: U.rand(80, 260), s: U.rand(260, 420), gs: 800, life: U.rand(0.6, 1.1), c: '#cfc8bb', a: 0.5, drag: 1.8 });
+      R.puff(race, { k: 'x', z: z0, x: sp.offset + U.rand(-0.1, 0.1), h: U.rand(60, 400), vz: car.speed * U.rand(0.3, 0.9), vx: U.rand(-1, 1), vh: U.rand(300, 1100), s: U.rand(40, 80), gs: 0, life: U.rand(0.3, 0.6), c: '#ffc24a', a: 1, drag: 1 });
+    }
+  };
+  // El alerón se desprende y sale volando
+  R.lostPart = function (race, car) {
+    if (!race.fx || !car.c3) return;
+    if (!R._wingImg) {
+      R._wingImg = U.canvas(220, 44);
+      const c = R._wingImg.getContext('2d');
+      c.fillStyle = '#15171b'; U.rr(c, 10, 14, 200, 14, 7); c.fill();
+      c.fillStyle = '#2c3038'; U.rr(c, 10, 14, 200, 5, 3); c.fill();
+      c.fillStyle = '#101114'; c.fillRect(4, 4, 12, 36); c.fillRect(204, 4, 12, 36);
+    }
+    const img = R._wingImg;
+    R.puff(race, { k: 'd', img, ix: 0, iy: 0, iw: img.width, ih: img.height, asp: 0.2, z: car.z + 150, x: car.x, h: 0.28 * CAR_UNITS, vz: car.speed * 0.45, vx: U.rand(-0.5, 0.5), vh: U.rand(900, 1500), s: 0.36 * CAR_UNITS, gs: 0, life: 3, rot: 0, spin: U.rand(-7, 7), c: '#fff', a: 1, drag: 0 });
+  };
   R.puff = function (race, o) {
     const P = race.fx.parts;
     if (P.length >= R.partCap()) return;
@@ -629,6 +763,34 @@
         }
       }
     }
+    // humo del motor en coches muy dañados y chispas al arrastrarse volcados
+    for (let i = 0; i < race.cars.length; i++) {
+      const c = race.cars[i];
+      if (!c.c3) continue;
+      let near = false;
+      for (let j = 0; j < players.length && !near; j++) {
+        let dz = c.z - players[j].z;
+        if (dz > L / 2) dz -= L; else if (dz < -L / 2) dz += L;
+        if (dz > -2500 && dz < 12000) near = true;
+      }
+      if (!near) continue;
+      if (c.dmgT > 0.4 && !c.flip) {
+        c.dsAcc = (c.dsAcc || 0) + (c.dmgT - 0.3) * 26 * dt;
+        const front = FRONT_ENGINE[c.model.id];
+        while (c.dsAcc >= 1) {
+          c.dsAcc -= 1;
+          R.puff(race, { k: 's', z: c.z + (front ? 0.8 : 0.32) * CAR_UNITS, x: c.x + U.rand(-0.04, 0.04), h: (front ? 0.19 : 0.23) * CAR_UNITS, vz: c.speed * 0.86, vx: U.rand(-0.08, 0.08), vh: U.rand(260, 480), s: U.rand(150, 240), gs: U.rand(520, 820), life: U.rand(0.8, 1.4), c: c.dmgT > 0.72 ? dim('#26272c') : dim('#8d9097'), a: 0.55, drag: 1.4 });
+        }
+      }
+      if (c.flip && c.flip.t > c.flip.air * 0.35) {
+        c.fsAcc = (c.fsAcc || 0) + 40 * dt;
+        while (c.fsAcc >= 1) {
+          c.fsAcc -= 1;
+          R.puff(race, { k: 'x', z: c.z + U.rand(0.1, 0.9) * CAR_UNITS, x: c.x + U.rand(-0.2, 0.2), h: U.rand(0, 60), vz: c.speed * U.rand(0.4, 0.9), vx: U.rand(-0.6, 0.6), vh: U.rand(300, 900), s: U.rand(40, 80), gs: 0, life: U.rand(0.25, 0.5), c: '#ffc24a', a: 1, drag: 1 });
+          if (Math.random() < 0.35) R.puff(race, { k: 's', z: c.z + U.rand(0.2, 0.8) * CAR_UNITS, x: c.x + U.rand(-0.25, 0.25), h: U.rand(20, 80), vz: c.speed * 0.6, vx: U.rand(-0.2, 0.2), vh: U.rand(100, 300), s: U.rand(200, 320), gs: 900, life: U.rand(0.7, 1.2), c: dustC, a: 0.5, drag: 1.6 });
+        }
+      }
+    }
     // integración
     const P = fx.parts;
     for (let i = P.length - 1; i >= 0; i--) {
@@ -636,8 +798,21 @@
       o.life -= dt;
       if (o.life <= 0) { P[i] = P[P.length - 1]; P.pop(); continue; }
       o.z = U.increase(o.z, o.vz * dt, L);
-      o.vz *= Math.exp(-o.drag * dt);
       o.x += o.vx * dt;
+      if (o.k === 'd' || o.k === 'x') {
+        // trozos y chispas: gravedad, rebote contra el suelo y rozamiento
+        o.vh -= (o.k === 'x' ? 2600 : 3400) * dt;
+        o.h += o.vh * dt;
+        if (o.h < 0) {
+          o.h = 0; o.vh = -o.vh * 0.32; o.vz *= 0.55; o.vx *= 0.55;
+          if (o.spin) o.spin *= 0.55;
+          if (Math.abs(o.vh) < 90) o.vh = 0;
+        }
+        o.vz *= Math.exp(-(o.h > 0 ? 0.4 : 3) * dt);
+        if (o.spin) o.rot += o.spin * dt;
+        continue;
+      }
+      o.vz *= Math.exp(-o.drag * dt);
       o.h += o.vh * dt;
       o.vh *= Math.exp(-1.2 * dt);
       o.s += o.gs * dt;
@@ -689,10 +864,30 @@
       if (t > 1) t = 1;
       const sc = s1.scale + (s2.scale - s1.scale) * t;
       const size = o.s * sc * K;
-      if (size < 1.5) continue;
+      if (size < (o.k === 'd' ? 0.8 : 1.5)) continue;
       const sx = s1.x + (s2.x - s1.x) * t + o.x * (s1.w + (s2.w - s1.w) * t);
       const sy = s1.y + (s2.y - s1.y) * t - o.h * sc * K;
       const lf = o.life / o.max;
+      if (o.k === 'd') {
+        // trozo de objeto: fragmento de su imagen girando
+        ctx.globalAlpha = Math.min(1, lf * 3) * (1 - fogA * 0.8);
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(o.rot || 0);
+        const hh = size * (o.asp || 1);
+        ctx.drawImage(o.img, o.ix, o.iy, o.iw, o.ih, -size / 2, -hh / 2, size, hh);
+        ctx.restore();
+        continue;
+      }
+      if (o.k === 'x') {
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = Math.min(1, lf * 2);
+        ctx.strokeStyle = o.c;
+        ctx.lineWidth = Math.max(1, size * 0.08);
+        ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx - o.vx * sc * K * 60, sy + (o.vh * 0.02) * sc * K); ctx.stroke();
+        ctx.globalCompositeOperation = 'source-over';
+        continue;
+      }
       let a = o.a * lf * (1 - fogA * 0.9);
       if (size > vh * 0.32) a *= Math.max(0, 1 - (size - vh * 0.32) / (vh * 0.45));
       if (a < 0.01) continue;

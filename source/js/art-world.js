@@ -263,7 +263,7 @@
       c.fillStyle = g; U.rr(c, W / 2, H * 0.42, 58, 24, 12); c.fill();
       col(W / 2 + 52, H * 0.18, H * 0.48, 28);
     });
-    return { img, w: 760, col: [[0.35, 0.65]] };
+    return { img, w: 760, col: [[0.35, 0.65]], brk: 'fall' };
   }
 
   function rock(I, tall) {
@@ -344,7 +344,7 @@
       c.moveTo(222, H - 220); c.lineTo(236, H - 262); c.lineTo(250, H - 272); c.moveTo(234, H - 252); c.lineTo(226, H - 276); c.stroke();
     });
     const worldW = { llama: 780, sheep: 760, reindeer: 900, snowman: 620 }[kind];
-    return { img, w: worldW, col: [[0.2, 0.8]] };
+    return { img, w: worldW, col: [[0.2, 0.8]], brk: kind === 'snowman' ? 'shatter' : null };
   }
 
   /* ---- Ventanas ---- */
@@ -537,7 +537,7 @@
         c.beginPath(); c.moveTo(W / 2 - 32, 44); c.lineTo(W / 2, 12); c.lineTo(W / 2 + 32, 44); c.closePath(); c.fill();
         c.fillRect(W / 2 - 22, 94, 44, 8);
       });
-      return { img, w: 520, ax: 0.5, col: [[0.38, 0.62]], light: [[0.5, 70 / 560, 1.0, 'lamp']] };
+      return { img, w: 520, ax: 0.5, col: [[0.38, 0.62]], light: [[0.5, 70 / 560, 1.0, 'lamp']], brk: 'fall' };
     }
     const img = mk(240, 640, I.q, (c, W, H) => {
       const metal = I.t('#8a9098'), dark = I.t('#4a5058');
@@ -555,7 +555,7 @@
     });
     const ax = side === 'R' ? 0.86 : 0.14;
     const lx = side === 'R' ? 0.16 : 0.84;
-    return { img, w: 1500, ax, col: [[ax - 0.05, ax + 0.05]], light: [[lx, 58 / 640, 1.0, 'lamp']] };
+    return { img, w: 1500, ax, col: [[ax - 0.05, ax + 0.05]], light: [[lx, 58 / 640, 1.0, 'lamp']], brk: 'fall' };
   }
 
   const BOARD_BRANDS = [
@@ -589,7 +589,7 @@
         c.fillRect(0, 0, W, 250);
       }
     });
-    return { img, w: 3800, col: [[0.22, 0.28], [0.72, 0.78]], light: I.dark ? [[0.3, 0.02, 1.4, 'lamp'], [0.7, 0.02, 1.4, 'lamp']] : null };
+    return { img, w: 3800, col: [[0.22, 0.28], [0.72, 0.78]], light: I.dark ? [[0.3, 0.02, 1.4, 'lamp'], [0.7, 0.02, 1.4, 'lamp']] : null, brk: 'fall' };
   }
 
   function neon(I, idx) {
@@ -626,7 +626,7 @@
       }
       c.shadowBlur = 0;
     });
-    return { img, w: 2500, col: [[0.17, 0.23], [0.77, 0.83]] };
+    return { img, w: 2500, col: [[0.17, 0.23], [0.77, 0.83]], brk: 'fall' };
   }
 
   function chevron(I, dir) {
@@ -646,7 +646,7 @@
         c.closePath(); c.fill();
       }
     });
-    return { img, w: 1700, col: [[0.06, 0.94]] };
+    return { img, w: 1700, col: [[0.06, 0.94]], brk: 'shatter' };
   }
 
   function gantry(I) {
@@ -690,16 +690,16 @@
   }
 
   function grandstand(I) {
-    const r = U.rng((U.hash(I.theme.id + 'st') >>> 0));
-    const img = mk(900, 380, I.q, (c, W, H) => {
+    const mkStand = (up) => { const r = U.rng((U.hash(I.theme.id + 'st') >>> 0)); return mk(900, 380, I.q, (c, W, H) => {
       c.fillStyle = I.t('#5a616c'); c.fillRect(0, 90, W, H - 90);
       for (let i = 0; i < 7; i++) {
         const y = 110 + i * 36;
         c.fillStyle = I.t(i % 2 ? '#8a929e' : '#7a828e'); c.fillRect(10, y, W - 20, 30);
         for (let x = 16; x < W - 16; x += 9) {
+          const bob = up && r() < 0.5 ? -3 : 0;
           c.fillStyle = I.t(r.pick(['#e8d0b0', '#c8403a', '#2a6a9a', '#f4f4f4', '#ffd21f', '#3a8a4a', '#1a1a1e', '#ff7a1a']));
-          c.fillRect(x, y + 4 + r.range(-2, 2), 6, 10);
-          c.fillStyle = I.t('#d8b898'); c.fillRect(x + 1, y + 1 + r.range(-1, 1), 4, 4);
+          c.fillRect(x, y + 4 + bob + r.range(-2, 2), 6, 10);
+          c.fillStyle = I.t('#d8b898'); c.fillRect(x + 1, y + 1 + bob + r.range(-1, 1), 4, 4);
         }
       }
       c.fillStyle = I.t('#2a2e36');
@@ -708,8 +708,73 @@
       c.fillStyle = I.t('#ff7a1a'); c.fillRect(0, H - 30, W, 14);
       c.fillStyle = I.t('#f4f4f4'); c.font = 'italic 900 22px "Avenir Next Condensed", Futura, sans-serif'; c.textAlign = 'center';
       c.fillText('TOP GEAR · SUPERCAR LEGENDS · TOP GEAR · SUPERCAR LEGENDS', W / 2, H - 16);
+    }); };
+    return { img: mkStand(false), img2: mkStand(true), w: 7400, col: [[0, 1]], fps: 2.2 };
+  }
+
+  // Público de pie tras una barrera: dos fotogramas (brazos arriba / abajo) para animarlo
+  function crowd(I, idx) {
+    const r = U.rng((U.hash(I.theme.id + 'crowd' + idx) >>> 0));
+    const cold = I.theme.weather === 'snow' || /helsinki|oslo|lapland|stockholm|alps|lochness/.test(I.theme.id);
+    const skins = ['#f1c8a6', '#e0ac85', '#c68a62', '#9a6444', '#6e4630', '#f6d6bc'];
+    const shirts = cold ? ['#1b3fa6', '#c8102e', '#2a2e36', '#5a616c', '#0f5a3c', '#ff7a1a', '#f4f4f4']
+      : ['#c8102e', '#ffd21f', '#1b3fa6', '#f4f4f4', '#ff7a1a', '#3a8a4a', '#7fcbe8', '#ff3c8e', '#1a1a1e'];
+    const hair = ['#1a1410', '#3a2a1e', '#6a4a2e', '#c8a060', '#2a2a2e', '#8a8a8a'];
+    const flags = [['#c8102e', '#f4f4f4'], ['#1b3fa6', '#ffd21f'], ['#ff7a1a', '#7fcbe8'], ['#1a1a1e', '#f4f4f4']];
+    const W = 900, H = 330;
+    const people = [];
+    for (let row = 0; row < 3; row++) {
+      const n = 24 - row * 2;
+      for (let i = 0; i < n; i++) {
+        people.push({
+          x: 16 + (i + (row % 2) * 0.5) * ((W - 32) / n) + r.range(-6, 6), row,
+          s: 1 - row * 0.12 + r.range(-0.05, 0.05), skin: r.pick(skins), shirt: r.pick(shirts), hair: r.pick(hair),
+          hat: cold ? r.chance(0.6) : r.chance(0.2), hatC: r.pick(shirts), arms: r.range(0, 1), flag: r.chance(0.12) ? r.pick(flags) : null,
+          ph: r.chance(0.5), cam: r.chance(0.06),
+        });
+      }
+    }
+    const draw = (up) => mk(W, H, I.q, (c) => {
+      c.fillStyle = I.t('#3a3e46'); c.fillRect(0, H - 150, W, 150);
+      people.sort((a, b) => a.row - b.row === 0 ? a.x - b.x : b.row - a.row);
+      for (const p of people) {
+        const base = H - 64 - p.row * 44, sc = p.s * 1.25;
+        const lift = up && p.ph ? -5 : 0;
+        const x = p.x, y = base + lift;
+        // cuerpo
+        c.fillStyle = I.t(p.shirt);
+        U.rr(c, x - 11 * sc, y - 34 * sc, 22 * sc, 36 * sc, 7 * sc); c.fill();
+        // brazos: arriba celebrando o abajo
+        c.strokeStyle = I.t(p.shirt); c.lineWidth = 6 * sc;
+        const armUp = (up ? p.arms > 0.35 : p.arms > 0.8);
+        c.beginPath();
+        if (armUp) { c.moveTo(x - 9 * sc, y - 28 * sc); c.lineTo(x - 17 * sc, y - 52 * sc); c.moveTo(x + 9 * sc, y - 28 * sc); c.lineTo(x + 17 * sc, y - 52 * sc); }
+        else { c.moveTo(x - 10 * sc, y - 28 * sc); c.lineTo(x - 14 * sc, y - 8 * sc); c.moveTo(x + 10 * sc, y - 28 * sc); c.lineTo(x + 14 * sc, y - 8 * sc); }
+        c.stroke();
+        if (armUp) { c.fillStyle = I.t(p.skin); [[-17, -54], [17, -54]].forEach((h) => { c.beginPath(); c.arc(x + h[0] * sc, y + h[1] * sc, 3.6 * sc, 0, Math.PI * 2); c.fill(); }); }
+        // cabeza, pelo y gorro
+        c.fillStyle = I.t(p.skin); c.beginPath(); c.arc(x, y - 43 * sc, 9 * sc, 0, Math.PI * 2); c.fill();
+        c.fillStyle = I.t(p.hair); c.beginPath(); c.arc(x, y - 45 * sc, 9 * sc, Math.PI * 1.05, Math.PI * 1.95); c.fill();
+        if (p.hat) { c.fillStyle = I.t(p.hatC); c.beginPath(); c.arc(x, y - 47 * sc, 9.5 * sc, Math.PI, 0); c.fill(); if (cold) { c.fillStyle = I.t('#f4f4f4'); c.beginPath(); c.arc(x, y - 57 * sc, 3 * sc, 0, Math.PI * 2); c.fill(); } }
+        // bandera ondeando
+        if (p.flag) {
+          const fx = x + 16 * sc, fy = y - 70 * sc, wv = up ? 6 : -6;
+          c.strokeStyle = I.t('#d8dce2'); c.lineWidth = 2 * sc;
+          c.beginPath(); c.moveTo(x + 14 * sc, y - 30 * sc); c.lineTo(fx, fy); c.stroke();
+          c.fillStyle = I.t(p.flag[0]);
+          c.beginPath(); c.moveTo(fx, fy); c.quadraticCurveTo(fx + 18 * sc, fy + wv * sc, fx + 36 * sc, fy + 2 * sc); c.lineTo(fx + 36 * sc, fy + 22 * sc); c.quadraticCurveTo(fx + 18 * sc, fy + 20 * sc + wv * sc, fx, fy + 20 * sc); c.closePath(); c.fill();
+          c.fillStyle = I.t(p.flag[1]); c.fillRect(fx + 2 * sc, fy + 8 * sc, 33 * sc, 5 * sc);
+        }
+        // flash de cámara (de noche se ve más)
+        if (p.cam && up) { c.fillStyle = 'rgba(255,255,240,0.95)'; c.beginPath(); c.arc(x + 6 * sc, y - 40 * sc, 5 * sc, 0, Math.PI * 2); c.fill(); }
+      }
+      // barrera de protección
+      c.fillStyle = I.t('#d8dce2'); c.fillRect(0, H - 60, W, 8);
+      for (let x = 0; x < W; x += 40) { c.fillStyle = I.t((x / 40) % 2 ? '#f4f4f4' : '#c8102e'); c.fillRect(x, H - 52, 40, 22); }
+      c.fillStyle = I.t('#5a616c'); for (let x = 20; x < W; x += 150) c.fillRect(x, H - 52, 8, 52);
+      c.fillStyle = I.t('#8a9098'); c.fillRect(0, H - 30, W, 4);
     });
-    return { img, w: 7400, col: [[0, 1]] };
+    return { img: draw(false), img2: draw(true), w: 3600, col: [[0.01, 0.99]], fps: 2.6 };
   }
 
   function tires(I) {
@@ -721,7 +786,7 @@
         c.fillStyle = I.t('#1a1b1e'); U.ellipse(c, x, y - 8, 30, 9); c.fill();
       }
     });
-    return { img, w: 1450, col: [[0.02, 0.98]], soft: true };
+    return { img, w: 1450, col: [[0.02, 0.98]], soft: true, brk: 'shatter' };
   }
 
   function fence(I) {
@@ -736,7 +801,7 @@
       c.fillStyle = I.t('#c8102e'); c.fillRect(0, H - 26, W, 12);
       c.fillStyle = I.t('#f4f4f4'); for (let x = 0; x < W; x += 60) c.fillRect(x, H - 26, 30, 12);
     });
-    return { img, w: 3300, col: [[0, 1]], soft: true };
+    return { img, w: 3300, col: [[0, 1]], soft: true, brk: 'shatter' };
   }
 
   function flag(I) {
@@ -754,7 +819,7 @@
       c.fillStyle = I.t(pal[1]); c.fillRect(24, 56, W, 30);
       c.restore();
     });
-    return { img, w: 820, col: [[0.06, 0.16]] };
+    return { img, w: 820, col: [[0.06, 0.16]], brk: 'fall' };
   }
 
   function pagoda(I) {
@@ -788,7 +853,7 @@
       c.fillStyle = sd; c.beginPath(); c.moveTo(W / 2 - 56, H - 196); c.lineTo(W / 2, H - 246); c.lineTo(W / 2 + 56, H - 196); c.closePath(); c.fill();
       c.fillStyle = st; c.beginPath(); c.arc(W / 2, H - 252, 10, 0, Math.PI * 2); c.fill();
     });
-    return { img, w: 640, col: [[0.25, 0.75]], light: I.dark ? [[0.5, (270 - 176) / 270, 0.5, 'lamp']] : null };
+    return { img, w: 640, col: [[0.25, 0.75]], light: I.dark ? [[0.5, (270 - 176) / 270, 0.5, 'lamp']] : null, brk: 'shatter' };
   }
 
   function column(I) {
@@ -821,7 +886,7 @@
       c.fillStyle = I.dark ? U.rgba('#ffe6b0', 0.9) : I.t('#3a4a5a');
       for (let r = 0; r < 6; r++) for (let k = 0; k < 3; k++) c.fillRect(32 + k * 34, 86 + r * 38, 28, 30);
     });
-    return { img, w: 720, col: [[0.08, 0.92]], light: I.dark ? [[0.5, 0.45, 0.6, 'lamp']] : null };
+    return { img, w: 720, col: [[0.08, 0.92]], light: I.dark ? [[0.5, 0.45, 0.6, 'lamp']] : null, brk: 'shatter' };
   }
 
   function mooringPole(I) {
@@ -833,7 +898,7 @@
       c.restore();
       c.fillStyle = I.t('#c8a040'); c.beginPath(); c.arc(W / 2, 28, 16, 0, Math.PI * 2); c.fill();
     });
-    return { img, w: 380, col: [[0.2, 0.8]] };
+    return { img, w: 380, col: [[0.2, 0.8]], brk: 'fall' };
   }
 
   function lighthouse(I) {
@@ -859,7 +924,7 @@
       }
       c.fillStyle = I.t('#4f7a3a'); c.fillRect(0, 26, W, 8);
     });
-    return { img, w: 3300, col: [[0, 1]], soft: true };
+    return { img, w: 3300, col: [[0, 1]], soft: true, brk: 'shatter' };
   }
 
   /* ---- Objetos recogibles ---- */
@@ -943,6 +1008,7 @@
       case 'gantry': return gantry(I);
       case 'torii': return torii(I);
       case 'stand': return grandstand(I);
+      case 'crowd': return crowd(I, idx);
       case 'tires': return tires(I);
       case 'fence': return fence(I);
       case 'flag': return flag(I);
@@ -971,7 +1037,7 @@
   }
 
   Art.spriteNames = function (theme) {
-    const names = new Set(['chevL', 'chevR', 'gantry', 'coin', 'fuel', 'nitro']);
+    const names = new Set(['chevL', 'chevR', 'gantry', 'coin', 'fuel', 'nitro', 'crowd0', 'crowd1']);
     theme.scenery.forEach((r) => r.s.forEach((n) => {
       if (r.lr) { names.add(n + 'L'); names.add(n + 'R'); } else names.add(n);
     }));

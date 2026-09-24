@@ -20,7 +20,7 @@
   const GEO = new Map(), ENV = new Map();
   const PW = 500, PH = 190;       // rasterizado del perfil: 500 px por unidad de largo
   const CROWN = 0.008;            // bombeo del capó y de la tapa del maletero
-  const WN = 14;                  // lados de cada rueda
+  const WN = 16;                  // lados de cada rueda (con el dibujo de la banda de rodadura)
   const sm = (a, b, x) => { const t = U.clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
   const rgb = (c) => { const r = U.hex2rgb(c); return [r[0] / 255, r[1] / 255, r[2] / 255]; };
 
@@ -124,8 +124,10 @@
     const zT = zA + 0.03, zN = zB - 0.035;
     const yTop = (z) => pr.at(pr.top, U.clamp(z, zT, zN));
     const yLowP = (z) => pr.at(pr.bot, U.clamp(z, zT, zN));
-    // paragolpes trasero a su altura real: deja ver la parte baja de los neumáticos
-    const yLow = (z) => Math.min(yLowP(z), 0.068 + Math.max(0, z - zA - 0.03) * 0.6);
+    // paragolpes trasero alto (el difusor queda entre las ruedas): los neumáticos traseros se ven enteros
+    const yLowC = (z) => Math.min(yLowP(z), 0.068 + Math.max(0, z - zA - 0.03) * 0.6);
+    const cornerK = (z) => sm(0.3, 0.1, z - zA);
+    const yLow = (z) => { const y = yLowC(z); return y + (Math.max(y, 0.104) - y) * cornerK(z); };
     // línea de cintura: del pie del parabrisas a la tapa trasera
     let zg = pr.zG1 - 0.035, yg = -1;
     for (let d = 0; d < 0.2 && !(yg > 0); d += 0.006) { const i = U.clamp(Math.floor((zg - d) * PW), 0, PW - 1); if (pr.gB[i] > 0) { yg = pr.gB[i]; zg -= d; } }
@@ -150,7 +152,7 @@
     // puntos de media sección (lado derecho), del faldón al centro del techo.
     // rol: 0 bajos, 1 costado, 2 hombro, 3 repisa de la ventanilla, 4 cabina, 5 techo, 6 franja
     const ROLE = [], KEEP = [];
-    [[0, 1], [1, 0], [1, 1], [1, 0], [1, 1], [1, 0], [1, 1], [2, 1], [2, 0], [3, 1], [4, 1], [4, 1], [5, 1], [5, 1]].forEach((q) => { ROLE.push(q[0]); KEEP.push(q[1]); });
+    [[0, 1], [0, 1], [1, 0], [1, 1], [1, 0], [1, 1], [1, 0], [1, 1], [2, 1], [2, 0], [3, 1], [4, 1], [4, 1], [5, 1], [5, 1]].forEach((q) => { ROLE.push(q[0]); KEEP.push(q[1]); });
     if (stripes) { ROLE.push(6, 5); KEEP.push(1, 1); }
     const IDX = [];
     for (let j = 0; j < ROLE.length; j++) if (lod === 0 || KEEP[j]) IDX.push(j);
@@ -162,11 +164,15 @@
       const ia = U.clamp(Math.floor((zw - ar * 1.08) * PW), 0, PW - 1), ib = U.clamp(Math.ceil((zw + ar * 1.08) * PW), 0, PW - 1);
       for (let i = ia + 1; i < ib; i++) sill[i] = sill[ia] + ((sill[ib] - sill[ia]) * (i - ia)) / (ib - ia);
     });
-    const ySill = (z) => Math.min(pr.at(sill, U.clamp(z, zT, zN)), 0.068 + Math.max(0, z - zA - 0.03) * 0.6);
+    const ySill = (z) => {
+      const y = Math.min(pr.at(sill, U.clamp(z, zT, zN)), 0.068 + Math.max(0, z - zA - 0.03) * 0.6);
+      const k = sm(0.3, 0.1, z - zA);
+      return y + (Math.max(y, 0.104) - y) * k;
+    };
     const archTop = wr + ar * 0.99;
     const archK = (z) => Math.max(sm(ar * 1.3, ar * 0.72, Math.abs(z - zFw)), sm(ar * 1.3, ar * 0.72, Math.abs(z - zRw)));
     const section = (z) => {
-      const hw = hwAt(z), yt = yTop(z), yl = yLow(z), ys = ySill(z);
+      const hw = hwAt(z), yt = yTop(z), yl = yLow(z), ys = ySill(z), yc = Math.min(yLowC(z) + 0.003, yl + 0.003);
       const ysh0 = Math.min(yt - CROWN, belt(z));
       const fT = fender(z) - 0.004;
       const ysh = Math.max(ysh0, fT);
@@ -184,7 +190,7 @@
       const y0 = Math.min(yl + 0.003, y1 - 0.002);
       const cb = Math.min(hw * 0.8, cabB), ct = Math.min(cb * 0.94, cabT);
       const all = [
-        [hw * 0.84, y0], [hw * 0.915, y0 + (y1 - y0) * 0.5], [hw * 0.968, y1], [hw * 0.992, (y1 + y2) / 2], [hw, y2],
+        [hw * 0.56, yc], [hw * 0.84, y0], [hw * 0.915, y0 + (y1 - y0) * 0.5], [hw * 0.968, y1], [hw * 0.992, (y1 + y2) / 2], [hw, y2],
         [hw * 0.993, (y2 + y3) / 2], [hw * 0.978, y3], [hw * 0.95, ysh - 0.0028], [hw * 0.906, ysh - 0.0004], [hw * 0.86, ysh + 0.0012],
         [cb, ysh + (hC > 0 ? Math.min(0.0035, hC * 0.3) : hC * 0.3)], [cb + (ct - cb) * 0.5, ysh + hC * 0.52], [ct, ysh + hC * 0.9], [ct * 0.55, ysh + hC * 0.975],
       ];
@@ -263,15 +269,21 @@
     // tapas: panel trasero (con calcomanía) y morro
     const capT = [], capN = [];
     for (let k = 0; k < np; k++) { capT.push(vi(0, k)); capN.push(vi(S.length - 1, k)); }
+    const tailClip = [];
+    for (let k = 0; k < np; k++) {
+      const q = vi(0, k) * 3;
+      const first = k === 0 || k === np - 1;
+      tailClip.push(V[q], first ? 0.004 : V[q + 1], V[q + 2]);
+    }
     const tailSec = pr.mask(zA + 0.012, yTop(zT) * 0.6) & 4 ? 'sec' : 'paint';
     F.push({ v: capT, m: tailSec, n: [0, 0, -1], cap: 1 });
-    F.push({ v: capN, m: 'paint', n: [0, 0, 1], flat: 1 });
+    F.push({ v: capN, m: 'paint', n: [0, 0, 1], flat: 1, nose: 1 });
 
     // piezas planas (cajas): retrovisores, alerones, aleta, luz de freno central
-    const box = (x0, x1, y0, y1, z0, z1, mats, bias) => {
+    const box = (x0, x1, y0, y1, z0, z1, mats, bias, part) => {
       const b = V.length / 3;
       [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0], [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]].forEach((p) => V.push(p[0], p[1], p[2]));
-      const f = (i, n, m) => { if (m) F.push({ v: i.map((q) => b + q), m, n, flat: 1, bias: bias || 0 }); };
+      const f = (i, n, m) => { if (m) F.push({ v: i.map((q) => b + q), m, n, flat: 1, bias: bias || 0, part }); };
       f([0, 1, 2, 3], [0, 0, -1], mats.back || mats.all);
       f([5, 4, 7, 6], [0, 0, 1], mats.front || mats.all);
       f([4, 0, 3, 7], [-1, 0, 0], mats.side || mats.all);
@@ -297,12 +309,12 @@
       const th = Math.max(0.009, wing.th * 1.1);
       const span = HW * spanK;
       const matW = wing.integrated || wing.low ? 'paint' : 'carbon';
-      box(-span, span, wing.y - th, wing.y, z0, z1, { top: matW, all: wing.integrated || wing.low ? 'black' : 'carbon' }, -0.01);
+      box(-span, span, wing.y - th, wing.y, z0, z1, { top: matW, all: wing.integrated || wing.low ? 'black' : 'carbon' }, -0.01, 'wing');
       if (!wing.integrated && !wing.low) {
-        [-1, 1].forEach((sd) => box(sd * span - 0.004, sd * span + 0.004, wing.y - th - 0.022, wing.y + 0.012, z0 - 0.006, z1 + 0.004, { all: 'carbon' }, -0.012));
+        [-1, 1].forEach((sd) => box(sd * span - 0.004, sd * span + 0.004, wing.y - th - 0.022, wing.y + 0.012, z0 - 0.006, z1 + 0.004, { all: 'carbon' }, -0.012, 'wing'));
         const px = HW * ({ bigwing: 0.3, swan: 0.28 }[R.spoiler] || 0.34), zp = (z0 + z1) / 2;
         const yb = yTop(zp) - 0.006;
-        [-1, 1].forEach((sd) => box(sd * px - 0.005, sd * px + 0.005, yb, wing.y - th, zp - 0.014, zp + 0.01, { all: 'carbon' }, -0.008));
+        [-1, 1].forEach((sd) => box(sd * px - 0.005, sd * px + 0.005, yb, wing.y - th, zp - 0.014, zp + 0.01, { all: 'carbon' }, -0.008, 'wing'));
       }
     } else if (R.spoiler === 'active' || R.spoiler === 'integrated') {
       const yd = yTop(zA + 0.04);
@@ -323,7 +335,7 @@
     }
     // pasos de rueda (fondo oscuro detrás de cada rueda)
     const wheels = [];
-    [[zFw, 0.064, 1], [zRw, 0.072, 0]].forEach((w) => {
+    [[zFw, 0.064, 1], [zRw, 0.078, 0]].forEach((w) => {
       [-1, 1].forEach((sd) => {
         // delanteras un poco por fuera de la aleta (al girar se ve la goma), traseras al ras del paragolpes
         const xo = w[2] ? hwAt(w[0]) * 1.08 : hwAt(w[0]) * 1.005;
@@ -351,9 +363,13 @@
     const AO = new Float32Array(nAll), VNa = new Float32Array(nAll * 3);
     VNa.set(VN);
     for (let i = 0; i < nAll; i++) AO[i] = 0.5 + 0.5 * sm(0.02, 0.14, V[i * 3 + 1]);
+    const NZ = new Float32Array(nAll * 3);
+    const rn = U.rng(U.hash(model.id + 'dmg'));
+    for (let i = 0; i < NZ.length; i++) NZ[i] = rn() * 2 - 1;
     g = {
-      id: model.id, V: new Float32Array(V), VN: VNa, AO, F, wheels, lines, HW, zA, zB, np, nS: S.length,
-      hwTail: hwAt(zA), yTail: yTop(zT), wr, ar,
+      id: model.id, V: new Float32Array(V), VN: VNa, AO, NZ, F, wheels, lines, HW, zA, zB, np, nS: S.length,
+      hwTail: hwAt(zA), yTail: yTop(zT), wr, ar, yBelt: (yT0 + yg) / 2,
+      hwNose: hwAt(zB), yNoseLo: yLow(zB), yNoseHi: yTop(zN) - CROWN, tailClip: new Float32Array(tailClip),
     };
     GEO.set(model.id + lod, g);
     return g;
@@ -383,6 +399,9 @@
       hor: rgb(U.mix(theme.sky[2], '#ffffff', night ? 0.05 : 0.2)),
       gnd: rgb(U.mix(theme.road[0], '#000000', 0.45)),
       gndH: rgb(U.mix(theme.fog, theme.grass[0], 0.45)),
+      // sombra proyectada: nítida con sol, suave con nubes/lluvia/niebla, tenue de noche
+      shK: !sun ? 0.3 : theme.weather !== 'clear' || theme.time === 'overcast' ? 0.45 : 1,
+      shC: U.mix('#04050a', theme.sky[0], 0.22),
     };
     ENV.set(theme.id, e);
     return e;
@@ -416,6 +435,7 @@
     const dw = Math.max(160, Math.round(detail));
     return {
       decal: Art.rearDecal(model, color, { w: dw, light: theme.ambient, shade: theme.shade }),
+      front: Art.frontDecal(model, color, { w: Math.min(420, dw * 0.8) }),
       rim: wheelTex(model, dw > 500 ? 160 : 96, false),
       blur: wheelTex(model, dw > 500 ? 160 : 96, true),
       paint: rgb(color),
@@ -429,11 +449,29 @@
   function buffers(n) {
     if (B.n >= n) return B;
     B.n = n;
-    ['wx', 'wy', 'wz', 'nx', 'ny', 'nz', 'sx', 'sy', 'zc', 'er', 'eg', 'eb', 'f5', 'df', 'nh', 'sh', 'ry'].forEach((k) => { B[k] = new Float32Array(n); });
+    ['wx', 'wy', 'wz', 'nx', 'ny', 'nz', 'sx', 'sy', 'zc', 'er', 'eg', 'eb', 'f5', 'df', 'nh', 'sh', 'ry', 'dv'].forEach((k) => { B[k] = new Float32Array(n); });
     B.lit = new Int32Array(n);
     return B;
   }
   let STAMP = 1;
+  // Envolvente convexa (cadena monótona) de puntos del suelo
+  const HIDX = [], HST = [];
+  function hull(xs, zs, n, ox, oz) {
+    HIDX.length = 0;
+    for (let i = 0; i < n; i++) HIDX.push(i);
+    HIDX.sort((a, c) => xs[a] - xs[c] || zs[a] - zs[c]);
+    HST.length = 0;
+    const cr = (o, a, c) => (xs[a] - xs[o]) * (zs[c] - zs[o]) - (zs[a] - zs[o]) * (xs[c] - xs[o]);
+    for (let k = 0; k < n; k++) { const q = HIDX[k]; while (HST.length >= 2 && cr(HST[HST.length - 2], HST[HST.length - 1], q) <= 0) HST.pop(); HST.push(q); }
+    const lo = HST.length + 1;
+    for (let k = n - 2; k >= 0; k--) { const q = HIDX[k]; while (HST.length >= lo && cr(HST[HST.length - 2], HST[HST.length - 1], q) <= 0) HST.pop(); HST.push(q); }
+    HST.pop();
+    for (let i = 0; i < HST.length; i++) { ox[i] = xs[HST[i]]; oz[i] = zs[HST[i]]; }
+    return HST.length;
+  }
+  let GX = new Float32Array(1024), GZ = new Float32Array(1024);
+  const HX = new Float32Array(1024), HZ = new Float32Array(1024), HSX = new Float32Array(1024), HSY = new Float32Array(1024);
+  const SH1 = [[0], [0], [0]];
   const list = [];
   const WX = new Float32Array(4 * WN * 2 + 16), WY = new Float32Array(WX.length), WZ = new Float32Array(WX.length);
   const WSX = new Float32Array(WX.length), WSY = new Float32Array(WX.length), WZC = new Float32Array(WX.length);
@@ -455,6 +493,8 @@
     Devuelve { lights, exh, x0, y0, x1, y1 } en coordenadas de pantalla.
   */
   C3.draw = function (ctx, model, tex, env, pose, view) {
+    // sin texturas (coche con modelo de Blender) solo se puede dibujar su sombra
+    if (!tex && !view.shadowOnly && !view.boundsOnly) view = Object.assign({}, view, { shadowOnly: true });
     const g = C3.geometry(model, view.lod);
     const nv = g.V.length / 3;
     const b = buffers(nv + 8);
@@ -472,16 +512,37 @@
     const tx0 = pvx, ty0 = pvy + heave, tz0 = pvz - 0.5;
     const TX = Ry[0] * tx0 + Ry[1] * ty0 + Ry[2] * tz0, TY = Ry[3] * tx0 + Ry[4] * ty0 + Ry[5] * tz0, TZ = Ry[6] * tx0 + Ry[7] * ty0 + Ry[8] * tz0 + 0.5;
     // --- cámara
-    const cph = Math.cos(view.pitch), sph = Math.sin(view.pitch), D = view.dist;
-    const Cx = 0, Cy = 0.1 + D * sph, Cz = 0.45 - D * cph;
+    const cph = Math.cos(view.pitch), sph = Math.sin(view.pitch), DIST = view.dist;
+    const Cx = 0, Cy = 0.1 + DIST * sph, Cz = 0.45 - DIST * cph;
     const zcA = -(0 - Cy) * sph + (0 - Cz) * cph;
     const sxA = 0, syA = -((0 - Cy) * cph + (0 - Cz) * sph) / zcA;
     const k = view.ppl * zcA;
     const ox = view.x, oy = view.y - (view.lift || 0);
-    const V = g.V, VN = g.VN;
+    const V = g.V, VN = g.VN, NZ = g.NZ;
+    // daños: abolladuras en el morro, la cola, los costados y el techo
+    const D = pose.dmg;
+    const dmgOn = !!D && D.f + D.r + D.l + D.rt + D.roof > 0.015;
+    const seed = pose.seed || 0;
+    const dz1 = 0.28 + (seed % 5) * 0.05, dz2 = 0.64 + (seed % 3) * 0.05;
     let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
     for (let i = 0; i < nv; i++) {
-      const px = V[i * 3] - pvx, py = V[i * 3 + 1] - pvy, pz = V[i * 3 + 2] - pvz;
+      let vx0 = V[i * 3], vy0 = V[i * 3 + 1], vz0 = V[i * 3 + 2];
+      let dv = 0;
+      if (dmgOn) {
+        const q = ((i + seed) % nv) * 3, n1 = NZ[q], n2 = NZ[q + 1], n3 = NZ[q + 2];
+        if (D.r > 0.01) { const u = 1 - (vz0 - g.zA) / 0.17; if (u > 0) { const a = D.r * u * u; vz0 += a * 0.055 * (0.7 + 0.3 * n1); vy0 += a * 0.018 * n2; vx0 *= 1 - a * 0.05 * (0.6 + 0.4 * n3); if (a > dv) dv = a; } }
+        if (D.f > 0.01) { const u = 1 - (g.zB - vz0) / 0.2; if (u > 0) { const a = D.f * u * u; vz0 -= a * 0.07 * (0.7 + 0.3 * n1); vy0 += a * 0.025 * (0.5 + 0.5 * n2); vx0 *= 1 - a * 0.05 * (0.6 + 0.4 * n3); if (a > dv) dv = a; } }
+        const sd = vx0 > 0 ? D.rt : D.l;
+        if (sd > 0.01 && Math.abs(vx0) > g.HW * 0.5) {
+          const pz = Math.min(1, Math.exp(-Math.pow((vz0 - dz1) / 0.16, 2)) + Math.exp(-Math.pow((vz0 - dz2) / 0.13, 2)) + 0.25);
+          const a = sd * pz * (0.6 + 0.4 * n1);
+          vx0 -= Math.sign(vx0) * a * 0.03; vy0 += a * 0.006 * n2;
+          if (a > dv) dv = a;
+        }
+        if (D.roof > 0.01 && vy0 > g.yBelt) { const a = D.roof * U.clamp((vy0 - g.yBelt) / 0.06, 0, 1); vy0 -= a * 0.042 * (0.7 + 0.3 * n1); vx0 *= 1 - a * 0.05; if (a > dv) dv = a; }
+      }
+      b.dv[i] = dv;
+      const px = vx0 - pvx, py = vy0 - pvy, pz = vz0 - pvz;
       const wx = M[0] * px + M[1] * py + M[2] * pz + TX;
       const wy = M[3] * px + M[4] * py + M[5] * pz + TY;
       const wz = M[6] * px + M[7] * py + M[8] * pz + TZ;
@@ -492,7 +553,14 @@
       const X = ox + ((dx / zc) - sxA) * k, Y = oy + ((-yc / zc) - syA) * k;
       b.sx[i] = X; b.sy[i] = Y; b.zc[i] = zc;
       if (X < x0) x0 = X; if (X > x1) x1 = X; if (Y < y0) y0 = Y; if (Y > y1) y1 = Y;
-      const nx = VN[i * 3], ny = VN[i * 3 + 1], nz = VN[i * 3 + 2];
+      let nx = VN[i * 3], ny = VN[i * 3 + 1], nz = VN[i * 3 + 2];
+      if (dv > 0.02) {
+        // la chapa abollada refleja la luz de forma irregular
+        const q = ((i + seed * 7) % nv) * 3;
+        nx += NZ[q] * dv * 0.55; ny += NZ[q + 1] * dv * 0.45; nz += NZ[q + 2] * dv * 0.4;
+        const l = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+        nx /= l; ny /= l; nz /= l;
+      }
       b.nx[i] = M[0] * nx + M[1] * ny + M[2] * nz;
       b.ny[i] = M[3] * nx + M[4] * ny + M[5] * nz;
       b.nz[i] = M[6] * nx + M[7] * ny + M[8] * nz;
@@ -505,6 +573,23 @@
     // --- ruedas (no se inclinan con la carrocería)
     const Wo = [WSX, WSY, WZC];
     const wheels = g.wheels;
+    const rig = !!pose.rigid;
+    const spin = pose.spin || 0;            // giro de las ruedas (ruedan al avanzar)
+    const blurK = U.clamp(pose.blur || 0, 0, 1);
+    // transforma un punto o una dirección de la rueda (local del coche) al mundo
+    const WT = [0, 0, 0];
+    const wpt = (lx, ly, lz) => {
+      if (rig) {
+        const px = lx - pvx, py = ly - pvy, pz = lz - pvz;
+        WT[0] = M[0] * px + M[1] * py + M[2] * pz + TX; WT[1] = M[3] * px + M[4] * py + M[5] * pz + TY; WT[2] = M[6] * px + M[7] * py + M[8] * pz + TZ;
+      } else { const rz = lz - 0.5; WT[0] = Ry[0] * lx + Ry[2] * rz; WT[1] = ly; WT[2] = Ry[6] * lx + Ry[8] * rz + 0.5; }
+      return WT;
+    };
+    const wdir = (dx, dy, dz) => {
+      if (rig) { WT[0] = M[0] * dx + M[1] * dy + M[2] * dz; WT[1] = M[3] * dx + M[4] * dy + M[5] * dz; WT[2] = M[6] * dx + M[7] * dy + M[8] * dz; }
+      else { WT[0] = Ry[0] * dx + Ry[2] * dz; WT[1] = dy; WT[2] = Ry[6] * dx + Ry[8] * dz; }
+      return WT;
+    };
     for (let w = 0; w < wheels.length; w++) {
       const wh = wheels[w];
       const d = wh.front ? pose.steer || 0 : 0;
@@ -513,28 +598,54 @@
       for (let s = 0; s < 2; s++) {
         const off = (s === 0 ? 0.5 : -0.5) * wh.w * wh.side;   // s=0 cara exterior
         for (let q = 0; q < WN; q++) {
-          const a = (q / WN) * Math.PI * 2;
+          const a = (q / WN) * Math.PI * 2 - spin;
           const lx = wh.x + ax * off + fx * Math.cos(a) * wh.r;
           const ly = wh.r + Math.sin(a) * wh.r;
           const lz = wh.z + az * off + fz * Math.cos(a) * wh.r;
-          const rx = lx, rz = lz - 0.5;
           const j = w * WN * 2 + s * WN + q;
-          WX[j] = Ry[0] * rx + Ry[2] * rz; WY[j] = ly; WZ[j] = Ry[6] * rx + Ry[8] * rz + 0.5;
+          wpt(lx, ly, lz);
+          WX[j] = WT[0]; WY[j] = WT[1]; WZ[j] = WT[2];
           proj(WX[j], WY[j], WZ[j], Wo, j);
           const X = WSX[j], Y = WSY[j];
           if (X < x0) x0 = X; if (X > x1) x1 = X; if (Y < y0) y0 = Y; if (Y > y1) y1 = Y;
         }
       }
     }
-    // sombra en el suelo (no se eleva con los saltos)
+    // --- sombras (se quedan en el suelo aunque el coche salte o vuelque):
+    //     proyectada en la dirección del sol + contacto bajo la carrocería y bajo cada rueda
     const SHP = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+    const lift0 = view.lift || 0;
+    let hullN = 0;
     if (view.shadow) {
-      const w = g.HW * 1.2;
-      const gp = (x, z, j) => { const rz = z - 0.5; proj(Ry[0] * x + Ry[2] * rz, 0, Ry[6] * x + Ry[8] * rz + 0.5, SHP, j); SHP[1][j] += view.lift || 0; };
-      gp(-w, 1.06, 0); gp(w, 1.06, 1); gp(-w, -0.07, 2);
+      const w = g.HW * 1.06;
+      const gp = (x, z, j) => { const rz = z - 0.5; proj(Ry[0] * x + Ry[2] * rz, 0, Ry[6] * x + Ry[8] * rz + 0.5, SHP, j); SHP[1][j] += lift0; };
+      gp(-w, 1.03, 0); gp(w, 1.03, 1); gp(-w, -0.03, 2);
       const ex = SHP[0][1] + SHP[0][2] - SHP[0][0], ey = SHP[1][1] + SHP[1][2] - SHP[1][0];
       x0 = Math.min(x0, SHP[0][0], SHP[0][1], SHP[0][2], ex); x1 = Math.max(x1, SHP[0][0], SHP[0][1], SHP[0][2], ex);
       y0 = Math.min(y0, SHP[1][0], SHP[1][1], SHP[1][2], ey); y1 = Math.max(y1, SHP[1][0], SHP[1][1], SHP[1][2], ey);
+      // sombra proyectada: la silueta del coche aplastada contra el suelo siguiendo la luz
+      let lx = env.L[0], ly = env.L[1], lz = env.L[2];
+      if ((env.shK || 1) < 0.6) { lx *= 0.4; lz *= 0.4; ly = Math.max(ly, 0.7); }   // luz difusa: sombra corta
+      ly = Math.max(ly, 0.34);                                                       // soles muy bajos: sombra limitada
+      const need = nv + wheels.length * WN * 2 + 8;
+      if (GX.length < need) { GX = new Float32Array(need * 2); GZ = new Float32Array(need * 2); }
+      let n = 0;
+      const step = nv > 600 ? 2 : 1;
+      for (let i = 0; i < nv; i += step) {
+        const h = b.wy[i] > 0 ? b.wy[i] : 0;
+        GX[n] = b.wx[i] - (lx * h) / ly; GZ[n] = b.wz[i] - (lz * h) / ly; n++;
+      }
+      for (let j = 0; j < wheels.length * WN * 2; j += 2) {
+        const h = WY[j] > 0 ? WY[j] : 0;
+        GX[n] = WX[j] - (lx * h) / ly; GZ[n] = WZ[j] - (lz * h) / ly; n++;
+      }
+      hullN = Math.min(1000, hull(GX, GZ, n, HX, HZ));
+      for (let j = 0; j < hullN; j++) {
+        proj(HX[j], 0, HZ[j], SH1, 0);
+        const X = SH1[0][0], Y = SH1[1][0] + lift0;
+        HSX[j] = X; HSY[j] = Y;
+        if (X < x0) x0 = X; if (X > x1) x1 = X; if (Y < y0) y0 = Y; if (Y > y1) y1 = Y;
+      }
     }
     if (view.boundsOnly) return { x0, y0, x1, y1 };
 
@@ -572,10 +683,22 @@
     };
     const tint = (m) => (m === 'paint' ? tex.paint : m === 'sec' ? tex.sec : m === 'stripe' ? tex.stripe : MAT[m].base);
     // color de un vértice separado en: parte propia (difusa + brillo) y reflejo del entorno
-    const SV = new Float32Array(8);
+    const SV = new Float32Array(8), TB = [0, 0, 0];
     const shade = (i, m) => {
       light(i);
-      const mt = MAT[m], base = tint(m);
+      const mt = MAT[m];
+      let base = tint(m), rk = 1;
+      const dv = b.dv[i];
+      if (dv > 0.04) {
+        // pintura arañada (chapa y imprimación) o cristal agrietado
+        const q = ((i + seed) % nv) * 3;
+        const sc = U.clamp(dv * (0.55 + 0.45 * NZ[q]) * 0.95, 0, 0.85);
+        const tg = m === 'glass' ? 0.34 : 0.2;
+        if (m === 'paint' || m === 'sec' || m === 'stripe' || m === 'glass') {
+          TB[0] = base[0] + (tg - base[0]) * sc; TB[1] = base[1] + (tg + 0.006 - base[1]) * sc; TB[2] = base[2] + (tg + 0.016 - base[2]) * sc;
+          base = TB; rk = 1 - sc * 0.6;
+        }
+      }
       const fres = mt.f0 + (1 - mt.f0) * b.f5[i];
       const dif = mt.diff * (1 - fres * 0.6);
       const amb = E.amb * (0.58 + 0.42 * b.ny[i]);
@@ -588,7 +711,7 @@
       SV[2] = base[2] * ((E.ambC[2] * amb + E.sunC[2] * dfl + fl) * dif + em) + sp * E.sunC[2];
       const ao = g.AO[i];
       SV[0] *= ao; SV[1] *= ao; SV[2] *= ao;
-      SV[3] = fres * mt.refl * (0.55 + 0.45 * ao);
+      SV[3] = fres * mt.refl * (0.55 + 0.45 * ao) * rk;
       SV[4] = b.er[i]; SV[5] = b.eg[i]; SV[6] = b.eb[i];
       SV[7] = b.ry[i];
       return SV;
@@ -606,6 +729,7 @@
     const F = g.F;
     for (let f = 0; f < F.length; f++) {
       const fc = F[f];
+      if (fc.part === 'wing' && pose.noWing) continue;
       const n = fc.n, a = fc.v[0];
       const wnx = M[0] * n[0] + M[1] * n[1] + M[2] * n[2];
       const wny = M[3] * n[0] + M[4] * n[1] + M[5] * n[2];
@@ -622,18 +746,18 @@
       const base = w * WN * 2;
       const d = wh.front ? pose.steer || 0 : 0;
       // normal exterior de la llanta
-      const anx = Math.cos(d) * wh.side, anz = -Math.sin(d) * wh.side;
-      const onx = Ry[0] * anx + Ry[2] * anz, onz = Ry[6] * anx + Ry[8] * anz;
+      wdir(Math.cos(d) * wh.side, 0, -Math.sin(d) * wh.side);
+      const onx = WT[0], ony = WT[1], onz = WT[2];
       let cxw = 0, cyw = 0, czw = 0, dz = 0;
       for (let q = 0; q < WN; q++) { cxw += WX[base + q]; cyw += WY[base + q]; czw += WZ[base + q]; dz += WZC[base + q]; }
       cxw /= WN; cyw /= WN; czw /= WN; dz /= WN;
-      if ((Cx - cxw) * onx + (Cz - czw) * onz > 0) list.push({ d: dz - 0.004, w, disc: 1 });
+      if ((Cx - cxw) * onx + (Cy - cyw) * ony + (Cz - czw) * onz > 0) list.push({ d: dz - 0.004, w, disc: 1 });
       for (let q = 0; q < WN; q++) {
         const q1 = (q + 1) % WN;
-        const am = ((q + 0.5) / WN) * Math.PI * 2;
+        const am = ((q + 0.5) / WN) * Math.PI * 2 - spin;
         // normal radial (hacia fuera del neumático)
-        const rnx0 = Math.sin(d) * Math.cos(am), rnz0 = Math.cos(d) * Math.cos(am), rny = Math.sin(am);
-        const rnx = Ry[0] * rnx0 + Ry[2] * rnz0, rnz = Ry[6] * rnx0 + Ry[8] * rnz0;
+        wdir(Math.sin(d) * Math.cos(am), Math.sin(am), Math.cos(d) * Math.cos(am));
+        const rnx = WT[0], rny = WT[1], rnz = WT[2];
         const p0 = base + q;
         if ((Cx - WX[p0]) * rnx + (Cy - WY[p0]) * rny + (Cz - WZ[p0]) * rnz <= 0) continue;
         const dd = (WZC[p0] + WZC[base + q1] + WZC[base + WN + q] + WZC[base + WN + q1]) / 4;
@@ -669,16 +793,49 @@
     ctx.save();
     if (view.alpha != null) ctx.globalAlpha = view.alpha;
     if (view.shadow) {
+      const A = view.shadow * (view.alpha == null ? 1 : view.alpha);
+      const sk = env.shK || 1;
       const sh = Art.fx().shadow;
-      const a = (SHP[0][1] - SHP[0][0]) / sh.width, bq = (SHP[1][1] - SHP[1][0]) / sh.width;
-      const c = (SHP[0][2] - SHP[0][0]) / sh.height, d = (SHP[1][2] - SHP[1][0]) / sh.height;
       ctx.save();
-      ctx.globalAlpha = view.shadow * (view.alpha == null ? 1 : view.alpha);
-      ctx.transform(a, bq, c, d, SHP[0][0], SHP[1][0]);
-      ctx.drawImage(sh, 0, 0);
-      ctx.drawImage(sh, sh.width * 0.12, sh.height * 0.1, sh.width * 0.76, sh.height * 0.8);
+      // 1) proyectada: borde suave con tres pasadas (penumbra)
+      if (hullN > 2) {
+        ctx.fillStyle = env.shC || '#05060a';
+        const soft = Math.max(1.2, k * (sk < 0.6 ? 0.028 : 0.012));
+        ctx.globalAlpha = A * sk * 0.28; fillPoly(ctx, HSX, HSY, hullN, soft);
+        ctx.globalAlpha = A * sk * 0.3; fillPoly(ctx, HSX, HSY, hullN, 0);
+        ctx.globalAlpha = A * sk * 0.26; fillPoly(ctx, HSX, HSY, hullN, -soft * 0.9);
+      }
+      // 2) contacto bajo la carrocería (oclusión ambiental)
+      if (!view.shadowOnly) {
+        const a = (SHP[0][1] - SHP[0][0]) / sh.width, bq = (SHP[1][1] - SHP[1][0]) / sh.width;
+        const c = (SHP[0][2] - SHP[0][0]) / sh.height, d = (SHP[1][2] - SHP[1][0]) / sh.height;
+        ctx.save();
+        ctx.globalAlpha = A * 0.85;
+        ctx.transform(a, bq, c, d, SHP[0][0], SHP[1][0]);
+        ctx.drawImage(sh, 0, 0);
+        ctx.drawImage(sh, sh.width * 0.1, sh.height * 0.12, sh.width * 0.8, sh.height * 0.76);
+        ctx.restore();
+      }
+      // 3) contacto de cada neumático con el asfalto (no en pleno vuelco)
+      if (!pose.rigid) {
+        const WB = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+        for (let w = 0; w < wheels.length; w++) {
+          const wh = wheels[w];
+          const hx = wh.w * 0.95, hz = wh.r * 1.05;
+          const gpw = (x, z, j) => { const rz = z - 0.5; proj(Ry[0] * x + Ry[2] * rz, 0, Ry[6] * x + Ry[8] * rz + 0.5, WB, j); WB[1][j] += lift0; };
+          gpw(wh.x - hx, wh.z + hz, 0); gpw(wh.x + hx, wh.z + hz, 1); gpw(wh.x - hx, wh.z - hz, 2);
+          const a = (WB[0][1] - WB[0][0]) / sh.width, bq = (WB[1][1] - WB[1][0]) / sh.width;
+          const c = (WB[0][2] - WB[0][0]) / sh.height, d = (WB[1][2] - WB[1][0]) / sh.height;
+          ctx.save();
+          ctx.globalAlpha = A * 0.95;
+          ctx.transform(a, bq, c, d, WB[0][0], WB[1][0]);
+          ctx.drawImage(sh, 0, 0);
+          ctx.restore();
+        }
+      }
       ctx.restore();
     }
+    if (view.shadowOnly) { ctx.restore(); return { x0, y0, x1, y1 }; }
     const EXP = view.expand == null ? 0.55 : view.expand;
     const SX = b.sx, SY = b.sy;
     let meta = null;
@@ -698,16 +855,22 @@
         if (it.disc) {
           // llanta con textura (transformación afín)
           const dd = wh.front ? pose.steer || 0 : 0;
-          const fxw = Math.sin(dd), fzw = Math.cos(dd);
           let cxw = 0, cyw = 0, czw = 0;
           for (let q = 0; q < WN; q++) { cxw += WX[base + q]; cyw += WY[base + q]; czw += WZ[base + q]; }
           cxw /= WN; cyw /= WN; czw /= WN;
-          const fwx = Ry[0] * fxw + Ry[2] * fzw, fwz = Ry[6] * fxw + Ry[8] * fzw;
+          wdir(Math.sin(dd), 0, Math.cos(dd));
+          const f0x = WT[0], f0y = WT[1], f0z = WT[2];
+          wdir(0, 1, 0);
+          const u0x = WT[0], u0y = WT[1], u0z = WT[2];
+          // los radios de la llanta giran con la rueda
+          const cs = Math.cos(spin), sn = Math.sin(spin);
+          const fwx = f0x * cs - u0x * sn, fwy = f0y * cs - u0y * sn, fwz = f0z * cs - u0z * sn;
+          const uwx = f0x * sn + u0x * cs, uwy = f0y * sn + u0y * cs, uwz = f0z * sn + u0z * cs;
           const P3 = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
           proj(cxw, cyw, czw, P3, 0);
-          proj(cxw + fwx * wh.r, cyw, czw + fwz * wh.r, P3, 1);
-          proj(cxw, cyw + wh.r, czw, P3, 2);
-          const img = (pose.blur || 0) > 0.5 ? tex.blur : tex.rim;
+          proj(cxw + fwx * wh.r, cyw + fwy * wh.r, czw + fwz * wh.r, P3, 1);
+          proj(cxw + uwx * wh.r, cyw + uwy * wh.r, czw + uwz * wh.r, P3, 2);
+          const img = tex.rim;
           const h = img.width / 2;
           const ux = P3[0][1] - P3[0][0], uy = P3[1][1] - P3[1][0];
           const vx = P3[0][2] - P3[0][0], vy = P3[1][2] - P3[1][0];
@@ -715,6 +878,8 @@
           ctx.save();
           ctx.transform(a, bb, c, dq, P3[0][0] - a * h - c * h, P3[1][0] - bb * h - dq * h);
           ctx.drawImage(img, 0, 0);
+          // a más velocidad, los radios se difuminan (pero se sigue viendo que giran)
+          if (blurK > 0.05) { const ga = ctx.globalAlpha; ctx.globalAlpha = ga * blurK * 0.72; ctx.drawImage(tex.blur, 0, 0); ctx.globalAlpha = ga; }
           ctx.restore();
         } else {
           const i0 = base + it.q, i1 = base + it.q1, i2 = base + WN + it.q1, i3 = base + WN + it.q;
@@ -725,8 +890,13 @@
           const ndv = Math.max(0, (it.nx * vx + it.ny * vy + it.nz * vz) / vl);
           const ndl = Math.max(0, it.nx * Lx + it.ny * Ly + it.nz * Lz);
           const t = MAT.tire.base;
-          const li2 = E.amb * (0.55 + 0.45 * it.ny) + E.sunI * ndl * 0.8 + E.fill * ndv * 0.8;
-          ctx.fillStyle = col3(t[0] * li2 + 0.03, t[1] * li2 + 0.03, t[2] * li2 + 0.034);
+          let li2 = E.amb * (0.55 + 0.45 * it.ny) + E.sunI * ndl * 0.8 + E.fill * ndv * 0.8;
+          // dibujo de la banda de rodadura: surcos alternos que ruedan con la rueda
+          const groove = it.q % 2 === 0;
+          const con = 1 - 0.55 * blurK;
+          li2 *= groove ? 1 - 0.42 * con : 1 + 0.1 * con;
+          const lift = groove ? 0.018 : 0.03 + 0.02 * con;
+          ctx.fillStyle = col3(t[0] * li2 + lift, t[1] * li2 + lift, t[2] * li2 + lift + 0.004);
           fillPoly(ctx, PX, PY, 4, EXP);
           // canto del neumático (hombro de la goma)
           ctx.strokeStyle = 'rgba(160,166,178,' + (0.1 + 0.2 * ndv).toFixed(2) + ')';
@@ -808,13 +978,28 @@
         gr.addColorStop(1, col3(cc[0] * 0.62, cc[1] * 0.62, cc[2] * 0.62));
         ctx.fillStyle = gr;
         fillPoly(ctx, PX, PY, n, EXP);
+        DMGR = D ? D.r : 0;
+        // la calcomanía no debe asomar por las esquinas (allí se ven los neumáticos)
+        ctx.save();
+        ctx.beginPath();
+        const TC = g.tailClip, ntc = TC.length / 3;
+        for (let q = 0; q < ntc; q++) {
+          const px = TC[q * 3] - pvx, py = TC[q * 3 + 1] - pvy, pz = TC[q * 3 + 2] - 0.002 + DMGR * 0.045 - pvz;
+          proj(M[0] * px + M[1] * py + M[2] * pz + TX, M[3] * px + M[4] * py + M[5] * pz + TY, M[6] * px + M[7] * py + M[8] * pz + TZ, LPJ, 0);
+          if (q === 0) ctx.moveTo(LPJ[0][0], LPJ[1][0]); else ctx.lineTo(LPJ[0][0], LPJ[1][0]);
+        }
+        ctx.closePath();
+        ctx.clip();
         meta = decal(ctx, g, tex.decal, M, TX, TY, TZ, pvx, pvy, pvz, proj);
+        ctx.restore();
       } else {
         ctx.fillStyle = col3(cc[0], cc[1], cc[2]);
         fillPoly(ctx, PX, PY, n, fc.m === 'well' ? 0.2 : EXP);
+        if (fc.nose && tex.front) frontDecal(ctx, g, tex.front, M, TX, TY, TZ, pvx, pvy, pvz, proj, E.night);
       }
     }
     ctx.restore();
+    DMGR = D ? D.r : 0;
     if (!meta) meta = decal(null, g, tex.decal, M, TX, TY, TZ, pvx, pvy, pvz, proj);
     meta.x0 = x0; meta.y0 = y0; meta.x1 = x1; meta.y1 = y1;
     meta.k = k;
@@ -836,11 +1021,51 @@
     ctx.fill();
   }
 
+  // Calcomanía frontal: faros y parrilla sobre el morro (se ve en la vista 360° de la meta)
+  const FP = [new Float32Array(4), new Float32Array(4), new Float32Array(4)];
+  function frontDecal(ctx, g, fd, M, TX, TY, TZ, pvx, pvy, pvz, proj, night) {
+    const W = fd.img.width, H = fd.img.height;
+    const hw = g.hwNose * 0.95, y0 = g.yNoseLo + 0.004, y1 = Math.max(y0 + 0.02, g.yNoseHi), z = g.zB + 0.002;
+    const toW = (u, v, j) => {
+      const px = -hw + (u / W) * hw * 2 - pvx, py = y1 - (v / H) * (y1 - y0) - pvy, pz = z - pvz;
+      // de frente, la izquierda de la imagen es la derecha del coche
+      const qx = -px;
+      proj(M[0] * qx + M[1] * py + M[2] * pz + TX, M[3] * qx + M[4] * py + M[5] * pz + TY, M[6] * qx + M[7] * py + M[8] * pz + TZ, FP, j);
+    };
+    const N = 3;
+    for (let s = 0; s < N; s++) {
+      const u0 = (W * s) / N, u1 = (W * (s + 1)) / N;
+      toW(u0, 0, 0); toW(u1, 0, 1); toW(u0, H, 2);
+      const du = u1 - u0;
+      const a = (FP[0][1] - FP[0][0]) / du, b = (FP[1][1] - FP[1][0]) / du;
+      const c = (FP[0][2] - FP[0][0]) / H, d = (FP[1][2] - FP[1][0]) / H;
+      ctx.save();
+      ctx.transform(a, b, c, d, FP[0][0] - a * u0, FP[1][0] - b * u0);
+      ctx.beginPath(); ctx.rect(u0 - (s ? 0.6 : 0), 0, du + (s < N - 1 ? 1.2 : 0), H); ctx.clip();
+      ctx.drawImage(fd.img, 0, 0);
+      ctx.restore();
+    }
+    if (night) {
+      // faros encendidos
+      const gl = Art.glow('#eaf2ff');
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      fd.lights.forEach((L) => {
+        toW(L[0] * W, L[1] * H, 3);
+        toW(L[0] * W + L[2] * W, L[1] * H, 0);
+        const r = Math.max(4, Math.abs(FP[0][0] - FP[0][3]) * 2.2);
+        ctx.globalAlpha = 0.9;
+        ctx.drawImage(gl, FP[0][3] - r, FP[1][3] - r, r * 2, r * 2);
+      });
+      ctx.restore();
+    }
+  }
+
+  let DMGR = 0;
   // Calcomanía trasera: se dibuja en tres franjas con transformación afín
   const DP = [new Float32Array(8), new Float32Array(8), new Float32Array(8)];
   function decal(ctx, g, dc, M, TX, TY, TZ, pvx, pvy, pvz, proj) {
     const sX = g.hwTail / dc.bw2, sY = g.yTail / (dc.GY - dc.yDeck);
-    const zD = g.zA - 0.0015;
+    const zD = g.zA - 0.0015 + (DMGR || 0) * 0.045;
     const W = dc.img.width, H = dc.img.height;
     const toW = (u, v, j) => {
       const xa = dc.x0 + u / dc.k, ya = dc.y0 + v / dc.k;
@@ -876,8 +1101,8 @@
   }
 
   /* ---------------- Imagen cacheada (coches lejanos) ---------------- */
-  C3.sprite = function (model, tex, env, yaw, ppl, pitch, dist) {
-    const pose = { yaw, roll: 0, pitch: 0, heave: 0, steer: 0, blur: 1 };
+  C3.sprite = function (model, tex, env, yaw, ppl, pitch, dist, steer) {
+    const pose = { yaw, roll: 0, pitch: 0, heave: 0, steer: steer || 0, blur: 1 };
     const bb = C3.draw(null, model, tex, env, pose, { x: 0, y: 0, ppl, pitch, dist, boundsOnly: true, shadow: 0.6, lod: 1 });
     const pad = 3;
     const w = Math.ceil(bb.x1 - bb.x0 + pad * 2), h = Math.ceil(bb.y1 - bb.y0 + pad * 2);

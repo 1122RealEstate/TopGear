@@ -36,8 +36,9 @@ MODOS DE JUEGO
 
 DIFICULTAD
 - Los rivales mejoran poco a poco con cada carrera del campeonato: al principio van más
-  despacio y frenan antes de las curvas; en las últimas copas van más rápido y pasan mejor
-  las curvas. Cada carrera de la copa muestra el nivel de los rivales (1 a 10).
+  despacio y frenan antes de las curvas; en las últimas copas van más rápido, pasan mejor
+  las curvas y llevan piezas mejoradas (motor, turbo y neumáticos). Cada carrera de la
+  copa muestra el nivel de los rivales (1 a 10) y sus piezas.
 - Opciones → Dificultad de los rivales: Fácil, Normal o Difícil.
 
 DINERO, MEJORAS Y COCHES
@@ -51,6 +52,18 @@ DINERO, MEJORAS Y COCHES
 - En cada copa verás la velocidad de los rivales: si tu coche no llega, mejora el motor
   o compra uno más rápido.
 
+DAÑOS, VUELCOS Y DESTROZOS
+- Los choques abollan el coche por zonas (morro, cola, costados y techo), rayan la
+  pintura y pueden romper los pilotos o arrancar el alerón. El indicador DAÑOS del
+  marcador muestra el estado; un coche muy dañado corre menos y echa humo.
+- Un golpe muy fuerte contra un muro o en la esquina de otro coche puede volcarlo.
+- Farolas, señales, vallas, barreras de neumáticos y carteles se derriban o se rompen.
+- La reparación se descuenta del premio de la carrera (nunca más de lo ganado).
+
+AL TERMINAR LA CARRERA
+- Vista panorámica de 360° alrededor de tu coche mientras sigue rodando tras la meta.
+  Pulsa Intro para saltarla.
+
 CONSEJOS
 - En la salida, mantén la aguja en la zona verde del cuentarrevoluciones: salida perfecta.
 - Recoge los bidones rojos: sin gasolina el coche apenas avanza.
@@ -61,9 +74,14 @@ CONSEJOS
 - Salirte de la carretera frena mucho y chocar contra el decorado aún más.
 - Si notas tirones, baja la calidad gráfica en Opciones.
 
-PARTIDA GUARDADA
+PARTIDA GUARDADA (AUTOGUARDADO)
+- La partida se guarda sola cada pocos segundos si algo cambia, al pausar y al cerrar.
+  Se conserva además una copia de seguridad de la versión anterior.
 - App de Mac: ~/Library/Application Support/TopGear Supercar Legends/partida.json
+  (copia de seguridad: partida.bak.json en la misma carpeta).
 - Navegador: se guarda automáticamente en el propio navegador.
+- Opciones → Exportar partida / Importar partida: guarda una copia en un archivo .json
+  para llevarla a otro navegador u ordenador.
 - Opciones → Borrar la partida para empezar de cero.
 
 CÓDIGO FUENTE

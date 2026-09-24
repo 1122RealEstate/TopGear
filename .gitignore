@@ -2,3 +2,5 @@
 .claude/
 source/game.html
 *.log
+source/blender/out/
+__pycache__/

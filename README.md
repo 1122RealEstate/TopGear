@@ -58,15 +58,31 @@ Todas las teclas se pueden **reasignar** en *Opciones → Configurar controles d
 </tr>
 <tr>
 <td><b>Salida al estilo Top Gear</b> — semáforo, cuenta atrás y salida perfecta si mantienes las revoluciones en la zona verde (si te pasas, quemas rueda).</td>
-<td><b>Coches en 3D</b> — cada modelo se genera en 3D a partir de su silueta real: pintura con reflejos del cielo, cristales, llantas con pinzas de freno y los pilotos traseros de cada marca.</td>
+<td><b>Coches modelados en Blender</b> — los 15 coches tienen su propio modelo 3D (carrocería, ópticas, llantas, alerones) pintado en tiempo real con WebGL: laca con reflejos del cielo, oclusión ambiental, pilotos que se encienden al frenar y faros de noche.</td>
 </tr>
 <tr>
 <td><img src="docs/screens/steer.jpg" alt="Giro con la rueda delantera visible"></td>
 <td><img src="docs/screens/drift.jpg" alt="Derrape con humo y marcas de goma"></td>
 </tr>
 <tr>
-<td><b>Giran las ruedas, no la carrocería</b> — al doblar, la carrocería sigue recta y se ven las ruedas delanteras girando hacia ese lado; las cuatro gomas siempre a la vista. Se agacha al acelerar y hunde el morro al frenar.</td>
+<td><b>Giran las ruedas, no la carrocería</b> — al doblar, la carrocería sigue recta y se ven las ruedas delanteras girando hacia ese lado; las cuatro gomas a la vista y rodando (dibujo de la banda y llantas que giran). Se agacha al acelerar y hunde el morro al frenar.</td>
 <td><b>Derrapes con humo</b> — humo de neumáticos y marcas de goma en el asfalto al forzar en curva, humo de escape y petardeos con llamas al soltar el gas.</td>
+</tr>
+<tr>
+<td><img src="docs/screens/damage.jpg" alt="Coche con daños y vuelco"></td>
+<td><img src="docs/screens/smash.jpg" alt="Señal destrozada tras un choque"></td>
+</tr>
+<tr>
+<td><b>Daños y vuelcos</b> — la carrocería se abolla por zonas, se rayan la pintura y los cristales, se rompen los pilotos y se puede perder el alerón; un golpe muy fuerte hace volcar el coche. El daño resta velocidad y la reparación se cobra al final.</td>
+<td><b>Todo se puede romper</b> — farolas, señales, vallas, barreras de neumáticos y carteles se derriban o saltan en pedazos que ruedan por el asfalto.</td>
+</tr>
+<tr>
+<td><img src="docs/screens/finish.jpg" alt="Vista 360° de la meta"></td>
+<td><img src="docs/screens/start.jpg" alt="Público en la salida"></td>
+</tr>
+<tr>
+<td><b>Vista 360° en la meta</b> — al terminar, la cámara da una vuelta completa alrededor de tu coche mientras sigue rodando, con fuegos artificiales si ganas.</td>
+<td><b>Público</b> — gradas y aficionados que celebran con banderas en la salida y en varias rectas; se oye el rugido al pasar.</td>
 </tr>
 <tr>
 <td><img src="docs/screens/helsinki.jpg" alt="Helsinki con aurora boreal"></td>
@@ -84,9 +100,9 @@ Todas las teclas se pueden **reasignar** en *Opciones → Configurar controles d
 - **Concesionario**: 15 coches con sus datos reales aproximados, desde el Ford Mustang GT inicial hasta el Bugatti Chiron Super Sport de 490 km/h.
 - **Modos**: carrera rápida, contrarreloj con **coche fantasma** de tu mejor vuelta, y **2 jugadores en pantalla dividida** en el mismo teclado.
 - **Conducción**: respuesta inmediata y precisa a la dirección (el coche va adonde apuntan las ruedas), cambio automático o manual, rebufo, saltos en los cambios de rasante, choques y cámara que se abre con el nitro.
-- **Dificultad progresiva**: los 15 rivales mejoran carrera a carrera durante el campeonato (van más rápido y pasan mejor las curvas; cada carrera muestra su nivel). En *Opciones* eliges Fácil, Normal o Difícil.
+- **Dificultad progresiva**: los 15 rivales mejoran carrera a carrera durante el campeonato y también **mejoran sus piezas** (motor, turbo y neumáticos): cada carrera de la copa muestra su nivel y sus piezas. Conducen limpio (no se cruzan para cerrarte el paso). En *Opciones* eliges Fácil, Normal o Difícil.
 - **Audio original**: 4 temas musicales propios y motores sintetizados que suenan distinto según sean V6, V8, V10, V12 o W16.
-- **Partida guardada** automáticamente (en la app de Mac se guarda en disco).
+- **Autoguardado**: la partida se guarda sola cada pocos segundos si algo cambia, al pausar y al cerrar la ventana, con copia de seguridad de la versión anterior (en la app de Mac se guarda en disco). En *Opciones* puedes **exportar e importar** la partida a un archivo para llevarla a otro navegador u ordenador.
 
 <table>
 <tr>
@@ -142,7 +158,12 @@ Top Gear.app          app nativa de macOS (Apple Silicon + Intel)
 releases/             Top Gear.app comprimida para descargar
 Jugar en Windows.bat  lanzador para Windows
 source/               código fuente
-  js/                 motor pseudo-3D, coches 3D, física, IA, arte procedural, audio, interfaz
+  js/                 motor pseudo-3D, física, IA, arte procedural, audio, interfaz
+    car-models.js     los 15 coches exportados desde Blender
+    car-gl.js         pintado de los coches con WebGL
+    car3d.js          coches 3D en Canvas 2D (si no hay WebGL) y sombras
+    finish.js         vista 360° de la meta
+  blender/            scripts de Python que modelan cada coche en Blender
   css/                estilos de la interfaz
   mac/                lanzador Swift (WebKit) e icono
   build.js            empaqueta todo en TopGear.html
@@ -155,7 +176,7 @@ Para desarrollar, sirve `source/` con cualquier servidor estático (por ejemplo 
 cd source && ./build_mac.sh
 ```
 
-El juego es JavaScript puro sobre Canvas 2D y Web Audio, sin dependencias. Los coches se modelan y se sombrean en 3D con código propio (`source/js/car3d.js`), sin WebGL.
+El juego es JavaScript puro sobre Canvas 2D, WebGL y Web Audio, sin dependencias. Los coches se modelan con scripts de Python para Blender (`source/blender/`, exportados con `export_game.py` a `source/js/car-models.js`) y el juego los pinta con WebGL (`source/js/car-gl.js`); si WebGL no está disponible, usa coches 3D generados en Canvas 2D (`source/js/car3d.js`).
 
 ---
 

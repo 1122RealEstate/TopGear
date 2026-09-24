@@ -123,6 +123,29 @@
         if (ok) put(i, 'torii', 0, { center: true });
       }
     }
+    // público: gradas junto a la salida y aficionados en varias rectas del circuito
+    const crowdZ = [];
+    const crowdAt = (i, sd) => {
+      i = ((i % N) + N) % N;
+      const o = sd * rng.range(1.62, 1.72);
+      if (!free(i, o, 0.45)) return;
+      put(i, rng() < 0.5 ? 'crowd0' : 'crowd1', o, { ph: rng() * 2 });
+      crowdZ.push(i * TG.C.SEG);
+    };
+    // gradas a ambos lados de la recta de meta (antes y después de la línea)
+    for (let k = -36; k <= 150; k += 6) { crowdAt(k, -1); crowdAt(k, 1); }
+    for (let zi = 0; zi < 3; zi++) {
+      const c0 = Math.floor(N * (0.25 + zi * 0.25));
+      let best = c0, bestV = 1e9;
+      for (let d = -120; d <= 120; d += 6) {
+        let v = 0;
+        for (let k = -15; k <= 15; k++) v += Math.abs(segs[(c0 + d + k + N) % N].curve);
+        if (v < bestV) { bestV = v; best = c0 + d; }
+      }
+      const sd = rng() < 0.5 ? -1 : 1;
+      for (let k = -12; k <= 12; k += 6) { crowdAt(best + k, sd); if (rng() < 0.5) crowdAt(best + k, -sd); }
+    }
+    track.crowdZ = crowdZ;
     // chevrones en el exterior de las curvas
     for (let i = 0; i < N; i++) {
       const c = segs[i].curve;

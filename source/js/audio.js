@@ -147,6 +147,50 @@
         [523, 1245, 2093, 2960].forEach((f) => T({ f: f * U.rand(0.95, 1.05), type: 'triangle', dur: 0.35, vol: 0.04 }));
         break;
       case 'soft': N({ dur: 0.3, vol: 0.3, type: 'lowpass', f: 900, f2: 150 }); break;
+      // objetos destrozados: el sonido depende del material
+      case 'smash': {
+        const m = opt || 'metal';
+        if (m === 'metal') {
+          N({ dur: 0.4, vol: 0.4, type: 'lowpass', f: 2600, f2: 200 });
+          [380, 910, 1530, 2270].forEach((f) => T({ f: f * U.rand(0.94, 1.06), type: 'triangle', dur: 0.55, vol: 0.05, when: t + 0.01 }));
+        } else if (m === 'glass') {
+          N({ dur: 0.25, vol: 0.3, type: 'lowpass', f: 1500, f2: 300 });
+          for (let i = 0; i < 7; i++) T({ f: U.rand(2500, 5200), type: 'sine', dur: 0.12, vol: 0.05, when: t + 0.02 + i * U.rand(0.02, 0.05) });
+        } else if (m === 'stone') {
+          N({ dur: 0.6, vol: 0.45, type: 'lowpass', f: 900, f2: 90, brown: true });
+          T({ f: 80, f2: 40, type: 'sine', dur: 0.3, vol: 0.3 });
+        } else if (m === 'snow') {
+          N({ dur: 0.35, vol: 0.28, type: 'lowpass', f: 1200, f2: 300, attack: 0.02 });
+        } else {
+          N({ dur: 0.3, vol: 0.4, type: 'bandpass', f: 1400, f2: 400, q: 0.9 });
+          T({ f: 140, f2: 70, type: 'sine', dur: 0.16, vol: 0.2 });
+        }
+        break;
+      }
+      // vuelco: golpe fuerte, chapa y cristales
+      case 'rollover':
+        N({ dur: 0.9, vol: 0.6, type: 'lowpass', f: 2600, f2: 90 });
+        T({ f: 62, f2: 26, type: 'sine', dur: 0.7, vol: 0.55 });
+        [700, 1480, 2330].forEach((f, i) => T({ f: f * U.rand(0.95, 1.05), type: 'triangle', dur: 0.4, vol: 0.05, when: t + 0.05 + i * 0.03 }));
+        break;
+      case 'thud':
+        N({ dur: 0.35, vol: 0.45 * (opt || 1), type: 'lowpass', f: 1100, f2: 120 });
+        T({ f: 90, f2: 42, type: 'sine', dur: 0.25, vol: 0.35 * (opt || 1) });
+        break;
+      case 'glass':
+        for (let i = 0; i < 9; i++) T({ f: U.rand(2400, 5600), type: 'sine', dur: 0.14, vol: 0.045, when: t + i * U.rand(0.015, 0.04) });
+        N({ dur: 0.2, vol: 0.15, type: 'highpass', f: 3000 });
+        break;
+      case 'clang':
+        [520, 1230, 2010].forEach((f) => T({ f: f * U.rand(0.95, 1.05), type: 'triangle', dur: 0.7, vol: 0.06 }));
+        N({ dur: 0.15, vol: 0.2, type: 'highpass', f: 2000 });
+        break;
+      // público: ovación
+      case 'cheer':
+        N({ dur: 2.6, vol: 0.32 * (opt || 1), type: 'bandpass', f: 1250, f2: 900, q: 0.7, attack: 0.25 });
+        N({ dur: 2.2, vol: 0.16 * (opt || 1), type: 'bandpass', f: 2600, f2: 1800, q: 1.2, attack: 0.3, when: t + 0.1 });
+        for (let i = 0; i < 6; i++) T({ f: U.rand(900, 1700), f2: U.rand(1200, 2200), type: 'sine', dur: 0.35, vol: 0.02, when: t + 0.2 + i * 0.25, glide: 0.3 });
+        break;
       case 'lap': [784, 988, 1175].forEach((f, i) => T({ f, type: 'square', dur: 0.16, vol: 0.11, when: t + i * 0.09, filter: { f: 3500 } })); break;
       case 'record': [784, 988, 1175, 1568].forEach((f, i) => T({ f, type: 'square', dur: 0.2, vol: 0.06, when: t + i * 0.08, filter: { f: 4000 } })); break;
       case 'finalLap': [988, 1319, 988, 1319].forEach((f, i) => T({ f, type: 'square', dur: 0.12, vol: 0.11, when: t + i * 0.13, filter: { f: 3500 } })); break;
@@ -329,6 +373,7 @@
     st.screech = A.squeal();
     st.off = A.loop('lowpass', 260, 0.7, true);
     st.rain = race.theme.weather === 'rain' ? A.loop('lowpass', 3500, 0.4) : null;
+    st.crowd = race.track.crowdZ && race.track.crowdZ.length ? A.loop('bandpass', 1150, 0.8) : null;
     A.rs = st;
   };
   A.raceUpdate = function (race, paused) {
@@ -367,12 +412,20 @@
     st.screech && st.screech.set(demo || sq < 0.22 ? 0 : 0.085 * Math.min(1, (sq - 0.15) * 1.4) * Math.min(1, sp * 2 + (p.burn || 0) + (p.spinT > 0 ? 1 : 0)) * mute, Math.min(1, sp));
     st.off && st.off.set(p.offroad ? 0.35 * Math.min(1, sp * 2) * mute : 0);
     st.rain && st.rain.set(0.08 * mute);
+    if (st.crowd) {
+      // el rugido del público sube al pasar junto a las gradas
+      let dmin = 1e9;
+      const zs = race.track.crowdZ;
+      for (let i = 0; i < zs.length; i++) { let d = Math.abs(zs[i] - p.z); if (d > L / 2) d = L - d; if (d < dmin) dmin = d; }
+      const k = U.clamp(1 - dmin / 3200, 0, 1);
+      st.crowd.set((demo ? 0.3 : 1) * 0.14 * k * k * mute * (0.8 + 0.2 * Math.sin(performance.now() / 380)), 1000 + 300 * Math.sin(performance.now() / 700));
+    }
   };
   A.raceStop = function () {
     const st = A.rs;
     if (!st) return;
     st.engines.forEach((e) => e.v && e.v.stop());
-    ['traffic', 'wind', 'screech', 'off', 'rain'].forEach((k) => st[k] && st[k].stop());
+    ['traffic', 'wind', 'screech', 'off', 'rain', 'crowd'].forEach((k) => st[k] && st[k].stop());
     A.rs = null;
   };
 })(window.TG);

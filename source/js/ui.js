@@ -224,13 +224,26 @@
       if (n) n._adjust = r.fn;
     });
   }
+  // expositor: el coche 3D gira despacio en la plataforma (si hay WebGL)
+  UI.showAng = 2.2;
   function showroomInto(canvas, model, color) {
+    if (canvas._raf) cancelAnimationFrame(canvas._raf);
     requestAnimationFrame(() => {
       const r = canvas.getBoundingClientRect();
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       canvas.width = Math.max(200, Math.round(r.width * dpr));
       canvas.height = Math.max(100, Math.round(r.height * dpr));
-      TG.Art.showroom(canvas, model, color);
+      let last = performance.now();
+      const frame = (t) => {
+        if (!canvas.isConnected) return;
+        const CG = TG.CarGL;
+        const gl = CG && CG.has(model.id);
+        if (gl) UI.showAng += Math.min(0.1, (t - last) / 1000) * 0.3;
+        last = t;
+        TG.Art.showroom(canvas, model, color, gl ? { angle: UI.showAng } : {});
+        if (gl || (CG && CG.ok && !CG.ready)) canvas._raf = requestAnimationFrame(frame);
+      };
+      frame(last);
     });
   }
   function flagCanvas(id, w, h) {
@@ -317,7 +330,7 @@
           return '<button class="cup ' + (locked ? 'locked' : '') + '" data-nav data-key="cup' + i + '" data-i="' + i + '">' +
             '<canvas class="cup-thumb" width="320" height="170"></canvas>' +
             '<div class="cup-info"><span class="flag-slot"></span><div class="cup-txt"><div class="cup-name">' + esc(cup.name) + '</div>' +
-            '<div class="cup-meta">1º puesto: ' + money(cup.prize) + ' · Rivales ' + cup.ai + ' km/h</div></div>' + trophy + '</div>' + run +
+            '<div class="cup-meta">1º puesto: ' + money(cup.prize) + ' · Rivales ' + TG.cupSpeed(cup) + ' km/h</div></div>' + trophy + '</div>' + run +
             (locked ? '<div class="cup-lock"><span>Bloqueada</span><small>Podio en ' + esc(TG.CUPS[i - 1].name) + '</small></div>' : '') +
             '</button>';
         }).join('') + '</div>' + hints(HINTS);
@@ -364,7 +377,10 @@
   }
   function lvlBar(t) {
     const n = rivalLevel(t);
-    return '<span class="lvl" title="Nivel de los rivales">Rivales <i style="--l:' + n * 10 + '%"></i><b>' + n + '/10</b></span>';
+    const D = TG.DIFFICULTY[S().settings.difficulty] || TG.DIFFICULTY.normal;
+    const up = TG.aiUpgrades(U.clamp(TG.raceLevel(t) + D.off, 0, 1));
+    const parts = up.motor + up.turbo + up.tires > 0 ? '<em>Motor ' + up.motor + ' · Turbo ' + up.turbo + ' · Neum. ' + up.tires + '</em>' : '<em>Piezas de serie</em>';
+    return '<span class="lvl" title="Nivel y piezas de los rivales">Rivales <i style="--l:' + n * 10 + '%"></i><b>' + n + '/10</b>' + parts + '</span>';
   }
 
   SCREENS.cup = {
@@ -408,7 +424,7 @@
       ctx.el.innerHTML = header(cup.name, 'Copa ' + (i + 1) + ' de ' + TG.CUPS.length) +
         '<div class="cup-grid"><div class="tracks">' + trackRows + '</div><div class="cup-side">' + right +
         '<div class="card"><div class="card-eyebrow">Tu coche</div>' + pick.html + statBlock(cst) +
-        (cst.top < cup.ai * 0.97 ? '<p class="warn-txt">Tus rivales alcanzan ' + speedTxt(cup.ai) + '. Mejora el motor o compra un coche más rápido.</p>' : '') + '</div>' +
+        (cst.top < TG.cupSpeed(cup) * 0.97 ? '<p class="warn-txt">Tus rivales alcanzan ' + speedTxt(TG.cupSpeed(cup)) + ' y mejoran sus piezas en cada carrera. Mejora el motor o compra un coche más rápido.</p>' : '') + '</div>' +
         '<button class="btn primary big" data-nav data-key="go">' + (run ? 'Continuar · ' + esc(next.name) : 'Empezar copa · ' + esc(next.name)) + '</button>' +
         (run ? '<button class="btn ghost" data-nav data-key="reset">Reiniciar copa</button>' : '') +
         '<button class="btn ghost" data-nav data-key="garage">Ir al garaje</button>' +
@@ -742,6 +758,46 @@
   };
 
   /* ---------- Opciones ---------- */
+  // Indicador discreto de «Partida guardada»
+  UI.saved = function () {
+    let el = document.getElementById('saveBadge');
+    if (!el) { el = U.el('div', 'save-badge', '<i></i>Partida guardada'); el.id = 'saveBadge'; document.body.appendChild(el); }
+    el.classList.remove('on'); void el.offsetWidth; el.classList.add('on');
+    clearTimeout(UI._sbT); UI._sbT = setTimeout(() => el.classList.remove('on'), 1600);
+  };
+  function exportSave() {
+    const text = TG.Save.exportText();
+    try {
+      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.tgApp) { window.webkit.messageHandlers.tgApp.postMessage('export:' + text); return; }
+    } catch (e) { /* navegador */ }
+    const a = document.createElement('a');
+    const d = new Date();
+    a.download = 'TopGear-partida-' + d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + '.json';
+    a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    UI.toast('Partida exportada: guarda el archivo para recuperarla cuando quieras.', 'ok');
+  }
+  function importSave() {
+    try {
+      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.tgApp) { window.webkit.messageHandlers.tgApp.postMessage('import'); return; }
+    } catch (e) { /* navegador */ }
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = '.json,application/json';
+    inp.onchange = () => {
+      const f = inp.files && inp.files[0];
+      if (!f) return;
+      const r = new FileReader();
+      r.onload = () => UI.importDone(TG.Save.importText(String(r.result)));
+      r.readAsText(f);
+    };
+    inp.click();
+  }
+  UI.importDone = function (ok) {
+    if (ok) { UI.toast('Partida importada correctamente.', 'ok'); UI.refresh(); }
+    else UI.toast('Ese archivo no es una partida válida de Top Gear.', 'warn');
+  };
+
   SCREENS.options = {
     render(ctx) {
       ctx.linear = true;
@@ -767,11 +823,15 @@
         '<li><b>Dificultad</b>: los rivales mejoran poco a poco con cada carrera del campeonato; aquí eliges el punto de partida.</li>' +
         '<li><b>Calidad</b>: si notas tirones, baja a Media o Baja.</li><li><b>Cambio manual</b>: sube de marcha cerca del corte (la marcha parpadea) para ganar aceleración.</li>' +
         '<li><b>Cámara lejana</b>: ves mejor las curvas que vienen.</li><li>Pulsa <kbd>M</kbd> en cualquier momento para silenciar la música.</li></ul></div>' +
+        '<div class="opt-save"><button class="btn" data-nav data-key="export">Exportar partida</button><button class="btn" data-nav data-key="import">Importar partida</button></div>' +
+        '<p class="small muted opt-note">La partida se guarda sola (autoguardado). Exporta una copia para llevarla a otro navegador u ordenador.</p>' +
         '<button class="btn danger" data-nav data-key="reset">Borrar la partida</button></div></div>' +
         hints([['↑↓', 'Navegar'], ['←→', 'Cambiar'], ['Esc', 'Volver']]);
       bindAdj(ctx.el, rows);
       $('[data-key="controls"]', ctx.el).addEventListener('click', () => UI.show('controls', { back: ctx.params.back }));
       $('[data-key="full"]', ctx.el).addEventListener('click', () => TG.Game.toggleFullscreen());
+      $('[data-key="export"]', ctx.el).addEventListener('click', exportSave);
+      $('[data-key="import"]', ctx.el).addEventListener('click', importSave);
       $('[data-key="reset"]', ctx.el).addEventListener('click', () => UI.modal('<h2>¿Borrar toda la partida?</h2><p>Perderás el dinero, los coches comprados, las mejoras, las copas y los récords. Esta acción no se puede deshacer.</p>', [
         { label: 'Borrar todo', cls: 'danger', fn: () => { TG.Save.reset(); UI.toast('Partida borrada. ¡A empezar de cero!', 'ok'); UI.refresh(); } },
         { label: 'Cancelar', cls: 'ghost' },
@@ -890,6 +950,7 @@
           '<div class="erow"><span>Monedas recogidas</span><b data-count="' + e.coins + '">$0</b></div>' +
           (e.clean ? '<div class="erow"><span>Bonus carrera limpia</span><b data-count="' + e.clean + '">$0</b></div>' : '') +
           (e.record ? '<div class="erow"><span>Récord de vuelta</span><b data-count="' + e.record + '">$0</b></div>' : '') +
+          (e.repair ? '<div class="erow neg"><span>Reparación de daños (' + e.dmg + '%)</span><b>−' + money(e.repair) + '</b></div>' : '') +
           '<div class="erow total"><span>Total</span><b data-count="' + e.total + '">$0</b></div>' +
           '<div class="erow bal"><span>Saldo</span><b>' + money(S().money) + '</b></div></div>';
       } else if (mode === 'time') {

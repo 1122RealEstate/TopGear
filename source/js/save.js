@@ -4,8 +4,8 @@
    ============================================================ */
 (function (TG) {
   const U = TG.U;
-  const KEY = 'topgear_supercar_legends_v1';
-  const S = (TG.Save = { data: null });
+  const KEY = 'topgear_supercar_legends_v1', BAK = KEY + '_bak';
+  const S = (TG.Save = { data: null, last: '', lastT: 0 });
 
   S.defaults = function () {
     return {
@@ -25,13 +25,23 @@
     };
   };
 
+  const parse = (raw) => {
+    if (typeof raw !== 'string' || raw.length < 3) return null;
+    try { const d = JSON.parse(raw); return d && typeof d === 'object' && d.cars ? d : null; } catch (e) { return null; }
+  };
+  // Carga la partida más reciente que sea válida (disco de la app, navegador o copias de seguridad)
   S.load = function () {
-    let raw = null;
-    try { if (typeof window.__TG_NATIVE_SAVE === 'string' && window.__TG_NATIVE_SAVE.length > 2) raw = window.__TG_NATIVE_SAVE; } catch (e) { raw = null; }
-    if (!raw) { try { raw = localStorage.getItem(KEY); } catch (e) { raw = null; } }
-    let d = null;
-    if (raw) { try { d = JSON.parse(raw); } catch (e) { d = null; } }
+    const get = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+    const nat = () => { try { return window.__TG_NATIVE_SAVE; } catch (e) { return null; } };
+    const natB = () => { try { return window.__TG_NATIVE_BAK; } catch (e) { return null; } };
+    const main = [parse(nat()), parse(get(KEY))].filter(Boolean);
+    main.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
+    let d = main[0] || null;
+    if (!d) d = parse(natB()) || parse(get(BAK));
     S.data = S.migrate(d);
+    S.last = JSON.stringify(Object.assign({}, S.data, { savedAt: 0 }));
+    // pedir al navegador que no borre los datos del juego
+    try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) { /* no disponible */ }
   };
 
   S.migrate = function (d) {
@@ -63,12 +73,39 @@
     return out;
   };
 
-  S.save = function () {
+  S.save = function (why) {
+    if (!S.data) return;
+    S.data.savedAt = Date.now();
     const s = JSON.stringify(S.data);
-    try { localStorage.setItem(KEY, s); } catch (e) { /* almacenamiento no disponible */ }
+    try {
+      // copia de seguridad de la versión anterior (como mucho una por minuto)
+      const now = Date.now();
+      if (now - S.lastT > 60000) { const prev = localStorage.getItem(KEY); if (prev) localStorage.setItem(BAK, prev); }
+      localStorage.setItem(KEY, s);
+    } catch (e) { /* almacenamiento no disponible */ }
     try {
       if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.tgSave) window.webkit.messageHandlers.tgSave.postMessage(s);
     } catch (e) { /* sin puente nativo */ }
+    S.last = JSON.stringify(Object.assign({}, S.data, { savedAt: 0 }));
+    S.lastT = Date.now();
+    if (S.onSaved) S.onSaved(why);
+  };
+  // Autoguardado: guarda si algo ha cambiado desde la última vez
+  S.autosave = function (why) {
+    if (!S.data) return false;
+    const cur = JSON.stringify(Object.assign({}, S.data, { savedAt: 0 }));
+    if (cur === S.last) return false;
+    S.save(why || 'auto');
+    return true;
+  };
+  // Exportar / importar la partida (para copiarla a otro navegador u ordenador)
+  S.exportText = () => JSON.stringify(Object.assign({ game: 'TopGear Supercar Legends' }, S.data), null, 1);
+  S.importText = function (text) {
+    const d = parse(text);
+    if (!d) return false;
+    S.data = S.migrate(d);
+    S.save('import');
+    return true;
   };
 
   S.reset = function () {

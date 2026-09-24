@@ -334,6 +334,82 @@
     return { img: cv, k, x0, y0, cx, GY, bw2, yDeck, lights, exh };
   };
 
+  /* ---------------- Frontal (calcomanía del morro) ----------------
+     Faros, parrilla, tomas de aire y emblema. Car3D la proyecta sobre el morro. */
+  Art.frontDecal = function (model, color, opt) {
+    opt = opt || {};
+    const W = Math.max(128, Math.round(opt.w || 400)), H = Math.round(W * 0.34);
+    const cv = U.canvas(W, H);
+    const c = cv.getContext('2d');
+    const id = model.id;
+    const style = /^(mustang|amggt|vantage)$/.test(id) ? 'grille' : id === 'p911' ? 'round' : /^(veyron|chiron)$/.test(id) ? 'bugatti' : id === 'gtr' ? 'gtr' : 'slim';
+    const k = W / 1000;
+    c.scale(k, k);
+    const HH = H / k;
+    c.lineJoin = 'round';
+    const black = '#0b0c0f', carbon = '#1a1c21';
+    const lights = [];
+    // splitter y tomas de aire inferiores
+    c.fillStyle = carbon;
+    U.rr(c, 40, HH * 0.9, 920, HH * 0.1, 12); c.fill();
+    const intake = (x, y, w, h, r) => {
+      c.fillStyle = black; U.rr(c, x, y, w, h, r); c.fill();
+      c.save(); U.rr(c, x, y, w, h, r); c.clip();
+      c.strokeStyle = '#23262d'; c.lineWidth = 4;
+      for (let xx = x - h; xx < x + w; xx += 16) { c.beginPath(); c.moveTo(xx, y); c.lineTo(xx + h, y + h); c.stroke(); c.beginPath(); c.moveTo(xx + h, y); c.lineTo(xx, y + h); c.stroke(); }
+      c.restore();
+    };
+    if (style === 'grille') {
+      // parrilla grande trapezoidal (muscle / GT)
+      c.fillStyle = black;
+      c.beginPath(); c.moveTo(280, HH * 0.36); c.lineTo(720, HH * 0.36); c.lineTo(760, HH * 0.86); c.lineTo(240, HH * 0.86); c.closePath(); c.fill();
+      c.save(); c.clip(); c.strokeStyle = '#2a2e36'; c.lineWidth = 5;
+      for (let x = 240; x < 780; x += 22) { c.beginPath(); c.moveTo(x, HH * 0.3); c.lineTo(x, HH * 0.9); c.stroke(); }
+      c.restore();
+      intake(70, HH * 0.6, 150, HH * 0.26, 18); intake(780, HH * 0.6, 150, HH * 0.26, 18);
+    } else if (style === 'bugatti') {
+      // parrilla de herradura
+      c.fillStyle = '#c9ced6';
+      c.beginPath(); c.ellipse(500, HH * 0.6, 95, HH * 0.36, 0, 0, Math.PI * 2); c.fill();
+      c.fillStyle = black; c.beginPath(); c.ellipse(500, HH * 0.62, 80, HH * 0.31, 0, 0, Math.PI * 2); c.fill();
+      c.save(); c.beginPath(); c.ellipse(500, HH * 0.62, 80, HH * 0.31, 0, 0, Math.PI * 2); c.clip();
+      c.strokeStyle = '#3a3e46'; c.lineWidth = 4;
+      for (let x = 400; x < 600; x += 14) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x + 30, HH); c.stroke(); }
+      c.restore();
+      intake(90, HH * 0.52, 240, HH * 0.34, 30); intake(670, HH * 0.52, 240, HH * 0.34, 30);
+    } else {
+      intake(110, HH * 0.56, 300, HH * 0.3, 26); intake(590, HH * 0.56, 300, HH * 0.3, 26);
+      if (style === 'gtr') { c.fillStyle = black; c.beginPath(); c.moveTo(390, HH * 0.4); c.lineTo(610, HH * 0.4); c.lineTo(560, HH * 0.8); c.lineTo(440, HH * 0.8); c.closePath(); c.fill(); }
+      else intake(430, HH * 0.62, 140, HH * 0.22, 16);
+    }
+    // faros
+    const glass = (path) => {
+      path();
+      c.fillStyle = U.lin(c, 0, 0, 0, HH * 0.4, [0, '#dfe8f2', 0.5, '#8a9cb2', 1, '#3a4658']); c.fill();
+      c.strokeStyle = '#15171c'; c.lineWidth = 4; c.stroke();
+    };
+    [-1, 1].forEach((sd) => {
+      const X = (x) => 500 + sd * x;
+      if (style === 'round') {
+        glass(() => { c.beginPath(); c.ellipse(X(380), HH * 0.24, 70, HH * 0.18, sd * 0.2, 0, Math.PI * 2); });
+        c.strokeStyle = '#ffffff'; c.lineWidth = 6; c.beginPath(); c.ellipse(X(380), HH * 0.24, 50, HH * 0.12, sd * 0.2, 0, Math.PI * 2); c.stroke();
+        lights.push([X(380) / 1000, 0.24, 0.07]);
+      } else if (style === 'grille') {
+        glass(() => { c.beginPath(); c.moveTo(X(110), HH * 0.16); c.lineTo(X(420), HH * 0.1); c.lineTo(X(430), HH * 0.34); c.lineTo(X(120), HH * 0.36); c.closePath(); });
+        c.fillStyle = '#ffffff'; for (let i = 0; i < 3; i++) c.fillRect(X(160 + i * 70) - 6, HH * 0.16, 12, HH * 0.14);
+        lights.push([X(270) / 1000, 0.23, 0.12]);
+      } else {
+        // faros finos de LED (superdeportivos)
+        glass(() => { c.beginPath(); c.moveTo(X(150), HH * 0.2); c.quadraticCurveTo(X(300), HH * 0.06, X(440), HH * 0.12); c.lineTo(X(430), HH * 0.3); c.quadraticCurveTo(X(300), HH * 0.3, X(160), HH * 0.36); c.closePath(); });
+        c.strokeStyle = '#ffffff'; c.lineWidth = 7;
+        c.beginPath(); c.moveTo(X(170), HH * 0.28); c.quadraticCurveTo(X(300), HH * 0.2, X(420), HH * 0.2); c.stroke();
+        lights.push([X(300) / 1000, 0.21, 0.1]);
+      }
+    });
+    Art.badge(c, model.rear.badge, 500, HH * 0.22, 1.2);
+    return { img: cv, lights };
+  };
+
   // Emblemas genéricos (formas evocadoras, sin logotipos reales)
   Art.badge = function (ctx, kind, x, y, sc, lit) {
     lit = lit || ((c) => c);
@@ -680,6 +756,33 @@
     ctx.beginPath(); ctx.arc(0, 0, W * 0.42, 0, Math.PI * 2); ctx.stroke();
     ctx.restore();
 
+    const CG = TG.CarGL;
+    if (CG && CG.has(model.id) && opt.angle != null) {
+      // coche 3D (Blender + WebGL) girando sobre la plataforma, con reflejo en el suelo
+      const tmp = Art._show && Art._show.width === W && Art._show.height === H ? Art._show : (Art._show = U.canvas(W, H));
+      const tc = tmp.getContext('2d');
+      tc.clearRect(0, 0, W, H);
+      CG.showroom(tc, model.id, CG.colors(model, color), W, H, floorY, opt.angle);
+      const rf = Art._showR && Art._showR.width === W && Art._showR.height === H ? Art._showR : (Art._showR = U.canvas(W, H));
+      const rc2 = rf.getContext('2d');
+      rc2.setTransform(1, 0, 0, 1, 0, 0);
+      rc2.clearRect(0, 0, W, H);
+      rc2.translate(0, floorY * 2);
+      rc2.scale(1, -1);
+      rc2.drawImage(tmp, 0, 0);
+      rc2.setTransform(1, 0, 0, 1, 0, 0);
+      rc2.globalCompositeOperation = 'destination-in';
+      rc2.fillStyle = U.lin(rc2, 0, floorY, 0, floorY + (H - floorY) * 0.9, [0, 'rgba(0,0,0,0.28)', 1, 'rgba(0,0,0,0)']);
+      rc2.fillRect(0, floorY, W, H - floorY);
+      rc2.fillRect(0, 0, 0, 0);
+      rc2.globalCompositeOperation = 'source-over';
+      ctx.save();
+      ctx.beginPath(); ctx.rect(0, floorY, W, H - floorY); ctx.clip();
+      ctx.drawImage(rf, 0, 0);
+      ctx.restore();
+      ctx.drawImage(tmp, 0, 0);
+      return tmp;
+    }
     const carW = Math.round(W * 0.86);
     const img = Art.carSide(model, color, { w: carW, spin: opt.spin });
     const x = (W - carW) / 2, y = floorY - img.height * 0.94;

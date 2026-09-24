@@ -11,12 +11,18 @@
     TG.Save.load();
     TG.Input.init();
     TG.Render.init(document.getElementById('game'));
+    if (TG.CarGL && TG.CarGL.init()) TG.CarGL.onReady = () => { if (G.race) { G.race.cars.forEach((c) => TG.Render.prepCar(G.race, c)); if (G.race.ghostCar) TG.Render.prepCar(G.race, G.race.ghostCar); } };
     TG.UI.init();
     TG.Input.on(G.onKey);
     G.startDemo();
     TG.UI.show('title');
-    window.addEventListener('blur', () => G.autoPause());
-    document.addEventListener('visibilitychange', () => { if (document.hidden) G.autoPause(); });
+    window.addEventListener('blur', () => { G.autoPause(); TG.Save.autosave('blur'); });
+    document.addEventListener('visibilitychange', () => { if (document.hidden) { G.autoPause(); TG.Save.autosave('hide'); } });
+    // autoguardado: cada 8 s si algo ha cambiado, y siempre al cerrar o salir de la ventana
+    setInterval(() => TG.Save.autosave('auto'), 8000);
+    window.addEventListener('pagehide', () => TG.Save.autosave('exit'));
+    window.addEventListener('beforeunload', () => TG.Save.autosave('exit'));
+    TG.Save.onSaved = (why) => { if (why !== 'exit' && why !== 'hide' && why !== 'blur') TG.UI.saved(); };
     window.addEventListener('pointerdown', () => TG.Audio.init());
     document.addEventListener('contextmenu', (e) => e.preventDefault());
     requestAnimationFrame(G.loop);
@@ -109,6 +115,8 @@
     }
     if (code === 'F11' || (code === 'KeyF' && (e.metaKey || e.ctrlKey))) { G.toggleFullscreen(); return true; }
     const race = G.race;
+    // saltar la vista panorámica de la meta
+    if (race && !race.demo && !UI.cur && race.phase === 'done' && !race.ended && (code === 'Enter' || code === 'Space' || code === 'NumpadEnter')) { race.skipFin = true; return true; }
     if (race && !race.demo && !UI.cur && (code === 'Escape' || code === 'KeyP')) { G.pause(); return true; }
     if (race && !race.demo && G.paused && UI.cur && UI.cur.name === 'pause' && code === 'KeyP') { G.resume(); return true; }
     return false;
@@ -118,6 +126,7 @@
     const race = G.race;
     if (!race || race.demo || G.paused || race.ended) return;
     G.paused = true;
+    TG.Save.autosave('pause');
     TG.Audio.play('pause');
     TG.UI.show('pause');
   };
@@ -168,6 +177,7 @@
         case 'finalLap': A.play('finalLap'); if (v) H.msg(v, '¡ÚLTIMA VUELTA!', { col: '#ff7a1a', dur: 2 }); break;
         case 'finish':
           A.play('finish');
+          if (v) A.play('cheer', 1);
           if (v && e.car.finishPos === 1 && race.mode !== 'time') R.burst(v, 'confetti', 140);
           break;
         case 'crash':
@@ -188,6 +198,30 @@
         case 'posUp': A.play('posUp'); if (v) H.msg(v, '▲ ' + e.pos + 'º', { slot: 'pos', col: '#46d98a', dur: 1.2 }); break;
         case 'posDown': A.play('posDown'); if (v) H.msg(v, '▼ ' + e.pos + 'º', { slot: 'pos', col: '#ff3b3b', dur: 1.2 }); break;
         case 'land': A.play('land'); if (v) v.cam.shake = Math.max(v.cam.shake, 0.3); break;
+        case 'smash': {
+          R.smash(race, e);
+          const mat = { tires: 'plastic', fence: 'metal', chevL: 'plastic', chevR: 'plastic', phonebox: 'glass', lantern: 'stone', wall: 'stone', snowman: 'snow' }[e.sp.name] || 'metal';
+          if (v) { A.play('smash', mat); v.cam.shake = Math.max(v.cam.shake, 0.35); R.burst(v, 'spark', 8); }
+          break;
+        }
+        case 'part': R.lostPart(race, e.car); if (v) { A.play('clang'); H.msg(v, 'PIERDES EL ALERÓN', { col: '#ff9a3a', slot: 'low', dur: 1.4 }); } break;
+        case 'rollover': {
+          const pv = race.views.find((vv) => vv.player === e.car);
+          if (pv) { A.play('rollover'); pv.cam.shake = 1.2; pv.hitFlash = 0.8; R.burst(pv, 'spark', 30); H.msg(pv, '¡VUELCO!', { col: '#ff3b3b', dur: 1.6 }); }
+          else if (!race.demo) {
+            // un rival vuelca cerca: también se oye
+            const p0 = race.players[0];
+            let dz = Math.abs(e.car.z - p0.z); if (dz > race.track.length / 2) dz = race.track.length - dz;
+            if (dz < 6000) A.play('rollover');
+          }
+          break;
+        }
+        case 'flipLand': {
+          const pv = race.views.find((vv) => vv.player === e.car);
+          if (pv) { A.play('thud'); A.play('glass'); pv.cam.shake = Math.max(pv.cam.shake, 0.8); R.burst(pv, 'spark', 16); }
+          break;
+        }
+        case 'recover': if (v) H.msg(v, 'DE VUELTA A LA PISTA', { col: '#46d98a', slot: 'low', dur: 1.4 }); break;
         case 'end': if (!race.demo) G.raceEnd(race); break;
         default: break;
       }
@@ -216,12 +250,15 @@
       }
       if (p.finished && (!rec.race || p.finishTime < rec.race)) rec.race = p.finishTime;
       d.records[race.def.id] = rec;
-      const total = prize + coins + clean + record;
+      // reparación: según los daños del coche, nunca más que lo ganado en la carrera
+      const gross = prize + coins + clean + record;
+      const repair = Math.min(gross, round50(p.dmgT * race.cup.prize * 0.22));
+      const total = gross - repair;
       d.money += total;
       d.stats.races++;
       if (pos === 1) d.stats.wins++;
       d.stats.earned += total;
-      data.earnings = { prize, coins, clean, record, total, pos };
+      data.earnings = { prize, coins, clean, record, repair, dmg: Math.round(p.dmgT * 100), total, pos };
       if (race.mode === 'career') {
         const ci = race.cup.index;
         const run = d.cups[ci].run;
