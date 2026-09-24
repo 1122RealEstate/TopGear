@@ -4,7 +4,7 @@
 
 <p align="center">
   <b>El clásico Top Gear, reimaginado con coches en 3D y gráficos modernos.</b><br>
-  Carreras por 8 países, dinero por cada victoria, taller de mejoras y un concesionario con Bugatti, Ferrari, Lamborghini, Aston Martin y más.
+  Carreras por 8 países, dinero por cada victoria, taller de mejoras y un concesionario con 39 coches: Bugatti, Ferrari, Lamborghini, Porsche, Aston Martin, leyendas de rally y de Le Mans.
 </p>
 
 <p align="center">
@@ -15,7 +15,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/circuitos-32-ff7a1a?style=flat-square&labelColor=161a22">
-  <img src="https://img.shields.io/badge/coches-15-7fcbe8?style=flat-square&labelColor=161a22">
+  <img src="https://img.shields.io/badge/coches-39-7fcbe8?style=flat-square&labelColor=161a22">
   <img src="https://img.shields.io/badge/copas-8-ffc53d?style=flat-square&labelColor=161a22">
   <img src="https://img.shields.io/badge/jugadores-1–2-46d98a?style=flat-square&labelColor=161a22">
   <img src="https://img.shields.io/badge/dependencias-0-f3f5f8?style=flat-square&labelColor=161a22">
@@ -58,7 +58,7 @@ Todas las teclas se pueden **reasignar** en *Opciones → Configurar controles d
 </tr>
 <tr>
 <td><b>Salida al estilo Top Gear</b> — semáforo, cuenta atrás y salida perfecta si mantienes las revoluciones en la zona verde (si te pasas, quemas rueda).</td>
-<td><b>Coches modelados en Blender</b> — los 15 coches tienen su propio modelo 3D (carrocería, ópticas, llantas, alerones) pintado en tiempo real con WebGL: laca con reflejos del cielo, oclusión ambiental, pilotos que se encienden al frenar y faros de noche.</td>
+<td><b>Coches modelados en Blender</b> — los 39 coches tienen su propio modelo 3D (carrocería, ópticas, llantas, alerones) pintado en tiempo real con WebGL: laca con reflejos del cielo, oclusión ambiental, pilotos que se encienden al frenar y faros de noche.</td>
 </tr>
 <tr>
 <td><img src="docs/screens/steer.jpg" alt="Giro con la rueda delantera visible"></td>
@@ -97,7 +97,7 @@ Todas las teclas se pueden **reasignar** en *Opciones → Configurar controles d
 - **Campeonato**: 8 copas (Estados Unidos, Sudamérica, Japón, Alemania, Escandinavia, Francia, Italia y Reino Unido) con 4 circuitos cada una. Termina en el podio para desbloquear la siguiente y ganar el trofeo de oro, plata o bronce.
 - **Economía**: premio por puesto + monedas + bonus de carrera limpia y de récord de vuelta, y un bonus final de copa.
 - **Taller**: 7 mejoras por coche — Motor, Turbo, Transmisión, Neumáticos, Nitro, Depósito y Chasis — con vista previa de cómo cambia el rendimiento.
-- **Concesionario**: 15 coches con sus datos reales aproximados, desde el Ford Mustang GT inicial hasta el Bugatti Chiron Super Sport de 490 km/h.
+- **Concesionario**: 39 coches con sus datos reales aproximados, ordenados por precio: superdeportivos, clásicos (Ferrari F40, 250 Testa Rossa, Dodge Charger 1970), leyendas de rally (Audi Quattro S1, Lancia Delta Integrale, Polo R WRC, i20 WRC) y de Le Mans (Porsche 917K, Mazda 787B, CLK GTR, Ferrari 499P, Cadillac GTP), desde el Ford Mustang GT inicial hasta el Bugatti Chiron Super Sport de 490 km/h.
 - **Modos**: carrera rápida, contrarreloj con **coche fantasma** de tu mejor vuelta, y **2 jugadores en pantalla dividida** en el mismo teclado.
 - **Conducción**: respuesta inmediata y precisa a la dirección (el coche va adonde apuntan las ruedas), cambio automático o manual, rebufo, saltos en los cambios de rasante, choques y cámara que se abre con el nitro.
 - **Dificultad progresiva**: los 15 rivales mejoran carrera a carrera durante el campeonato y también **mejoran sus piezas** (motor, turbo y neumáticos): cada carrera de la copa muestra su nivel y sus piezas. Conducen limpio (no se cruzan para cerrarte el paso). En *Opciones* eliges Fácil, Normal o Difícil.
@@ -132,19 +132,43 @@ Todas las teclas se pueden **reasignar** en *Opciones → Configurar controles d
 | | Coche | Velocidad | Precio |
 |---|---|---|---|
 | 🇺🇸 | Ford Mustang GT | 250 km/h | Inicial |
+| 🇺🇸 | Dodge Charger R/T 1970 | 240 km/h | $45.000 |
 | 🇯🇵 | Nissan GT-R Nismo | 315 km/h | $55.000 |
+| 🇮🇹 | Lancia Delta HF Integrale Evo | 220 km/h | $70.000 |
 | 🇬🇧 | Aston Martin Vantage | 314 km/h | $78.000 |
 | 🇩🇪 | Mercedes-AMG GT R | 318 km/h | $115.000 |
+| 🇰🇷 | Hyundai i20 WRC | 200 km/h | $130.000 |
+| 🇩🇪 | Volkswagen Polo R WRC | 200 km/h | $140.000 |
 | 🇩🇪 | Porsche 911 Turbo S | 330 km/h | $150.000 |
+| 🇩🇪 | Volkswagen Beetle Gr.3 | 270 km/h | $160.000 |
+| 🇩🇪 | Audi Sport Quattro S1 E2 | 220 km/h | $180.000 |
 | 🇩🇪 | Audi R8 V10 | 331 km/h | $185.000 |
 | 🇮🇹 | Lamborghini Huracán EVO | 325 km/h | $240.000 |
+| 🇩🇪 | Porsche 911 GT3 RS | 296 km/h | $240.000 |
+| 🇮🇹 | Lamborghini Huracán EVO Spyder | 325 km/h | $260.000 |
 | 🇬🇧 | McLaren 720S | 341 km/h | $290.000 |
 | 🇮🇹 | Ferrari F8 Tributo | 340 km/h | $330.000 |
+| 🇮🇹 | Ferrari 296 GTB Assetto Fiorano | 330 km/h | $360.000 |
+| 🇩🇪 | Porsche 911 GT3 R (991.2) | 285 km/h | $420.000 |
 | 🇮🇹 | Lamborghini Aventador SVJ | 350 km/h | $440.000 |
+| 🇮🇹 | Ferrari F40 | 324 km/h | $450.000 |
+| 🇮🇹 | Lamborghini Huracán Super Trofeo EVO2 | 290 km/h | $480.000 |
+| 🇩🇪 | Porsche 911 GT3 R (992) | 290 km/h | $520.000 |
 | 🇮🇹 | Ferrari LaFerrari | 350 km/h | $580.000 |
+| 🇮🇹 | Ferrari 296 GT3 | 300 km/h | $600.000 |
 | 🇫🇷 | Bugatti Veyron 16.4 | 407 km/h | $720.000 |
+| 🇯🇵 | Mazda LM55 Vision GT | 340 km/h | $850.000 |
 | 🇬🇧 | Aston Martin Valkyrie | 355 km/h | $900.000 |
+| 🇮🇹 | Ferrari Daytona SP3 | 340 km/h | $950.000 |
+| 🇩🇪 | Mercedes-Benz CLK GTR Roadster | 320 km/h | $1.100.000 |
+| 🇮🇹 | Ferrari 250 Testa Rossa | 270 km/h | $1.200.000 |
 | 🇸🇪 | Koenigsegg Jesko | 450 km/h | $1.300.000 |
+| 🇯🇵 | Mazda 787B | 340 km/h | $1.300.000 |
+| 🇺🇸 | Cadillac V-Series.R (GTP) | 330 km/h | $1.400.000 |
+| 🇩🇪 | Porsche 917K (Gulf) | 360 km/h | $1.500.000 |
+| 🇦🇪 | Devel Sixteen | 420 km/h | $1.600.000 |
+| 🇮🇹 | Ferrari 499P | 340 km/h | $1.800.000 |
+| 🇫🇷 | Bugatti Bolide | 380 km/h | $1.900.000 |
 | 🇫🇷 | Bugatti Chiron Super Sport | 490 km/h | $2.000.000 |
 
 <p align="center"><img src="docs/screens/garage.jpg" alt="Garaje" width="720"></p>
@@ -159,7 +183,7 @@ releases/             Top Gear.app comprimida para descargar
 Jugar en Windows.bat  lanzador para Windows
 source/               código fuente
   js/                 motor pseudo-3D, física, IA, arte procedural, audio, interfaz
-    car-models.js     los 15 coches exportados desde Blender
+    car-models.js     los 39 coches exportados desde Blender
     car-gl.js         pintado de los coches con WebGL
     car3d.js          coches 3D en Canvas 2D (si no hay WebGL) y sombras
     finish.js         vista 360° de la meta

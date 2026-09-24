@@ -402,3 +402,82 @@ def build_models():
     with open(JS, 'w') as f:
         f.write('\n'.join(js))
     return dict(cars=list(recs), kb=round(os.path.getsize(JS) / 1024))
+
+
+# ------------------------------------------------------------------ silueta 2D para data.js
+RIM2D = {'5': '5', '6': '6', '10': '10', 'Y': 'Y', 'aero': 'aero', 'turbine': 'turbine', 'jesko': 'aero', 'mesh': '10', 'wire': '10',
+         'dish': 'aero', 'star': '5', 'rally': '6'}
+SWAN = {'gt3rs', 'gt3r992', 'f296gt3', 'beetle', 'jesko'}
+
+
+def side_data(G):
+    '''Silueta lateral (x: 0 = morro, 1 = cola; y = altura) para side{} de data.js, sacada del modelo:
+    la usan Car3D (coche de respaldo sin WebGL) y la sombra de los coches GL.'''
+    S = G['SPEC']
+    cid, L, W = S['id'], S['L'], S['wheels']
+    ob = bpy.data.objects[cid]
+    me = ob.data
+    names = [m.name[3:] if m else '' for m in me.materials]
+    B = 64
+    top, bot = [-1.0] * B, [9.0] * B
+    wing = None
+    for p in me.polygons:
+        nm = names[p.material_index]
+        vs = [me.vertices[i].co for i in p.vertices]
+        if nm.startswith('wing_'):
+            for co in vs:
+                if wing is None:
+                    wing = [co.y, co.y, co.z, co.z, abs(co.x)]
+                wing = [min(wing[0], co.y), max(wing[1], co.y), min(wing[2], co.z), max(wing[3], co.z), max(wing[4], abs(co.x))]
+            continue
+        if nm == 'hidden':
+            continue
+        for co in vs:
+            i = min(B - 1, max(0, int(co.y / L * B)))
+            top[i] = max(top[i], co.z)
+            bot[i] = min(bot[i], co.z)
+    for arr, bad in ((top, -1.0), (bot, 9.0)):
+        for i in range(B):
+            if arr[i] == bad:
+                j = next((k for k in range(i, B) if arr[k] != bad), None)
+                k2 = next((k for k in range(i, -1, -1) if arr[k] != bad), None)
+                arr[i] = arr[j] if j is not None else arr[k2]
+    X = lambda y: round(min(1.0, max(0.0, (L - y) / L)), 3)
+    Z = lambda z: round(z / L, 3)
+    yc = lambda i: (i + 0.5) / B * L
+    # contorno: bajo del morro, morro, techo de delante a atrás, cola y bajo de la cola
+    body = [[0.012, Z(bot[B - 1] + 0.02)], [0.0, Z((bot[B - 1] + top[B - 1]) / 2)]]
+    for i in range(B - 1, -1, -1):
+        if i in (B - 1, 0) or i % 4 == 1:
+            body.append([X(yc(i)), Z(top[i])])
+    body += [[1.0, Z((bot[0] + top[0]) / 2)], [0.99, Z(bot[0] + 0.02)]]
+    mid = [bot[i] for i in range(B) if W['yr'] + 0.5 < yc(i) < W['yf'] - 0.5]
+    cl = round((min(mid) if mid else 0.12) / L + 0.02, 3)
+    out = dict(body=body, wheels=[X(W['yf']), X(W['yr']), round(W['r'] / L, 4)], cl=cl,
+               rim=RIM2D.get(W['style'], '5'), caliper=W.get('caliper', '#c41a1a'))
+    # cristal lateral a partir de las curvas del habitáculo
+    C = S['cabin']
+    zs = C['zones']
+    ws = next((a for (a, b, m, pm) in zs if m == 'glass' and b >= 9), None)
+    if ws is not None and C.get('side_mat') != 'hidden':
+        edge, belt = G['Curve'](C['edge']), G['Curve'](C['belt'])
+        ya, yb = C['y0'] + (ws - C['y0']) * 0.3, ws + (C['y1'] - ws) * 0.35
+        ys = [ya + (yb - ya) * k / 6 for k in range(7)]
+        out['glass'] = [[X(y), Z(edge(y) - 0.03)] for y in reversed(ys)] + [[X(y), Z(belt(y) + 0.03)] for y in ys]
+        out['mirror'] = [X(yb) + 0.02, Z(belt(yb) + 0.02)]
+    zf, zr = top[B - 4], top[3]
+    out['hl'] = [[0.006, Z(zf * 0.78)], [0.07, Z(zf * 0.86)], [0.078, Z(zf * 0.8)], [0.014, Z(zf * 0.72)]]
+    out['tl'] = [[0.978, Z(zr * 0.93)], [0.998, Z(zr * 0.91)], [0.999, Z(zr * 0.82)], [0.98, Z(zr * 0.84)]]
+    zl = (top[B // 2] * 0.62)
+    out['line'] = [[0.06, Z(zl * 0.95)], [0.4, Z(zl)], [0.7, Z(zl * 1.02)]]
+    if wing:
+        w = dict(x=X((wing[0] + wing[1]) / 2), y=Z(wing[3]), len=round((wing[1] - wing[0]) / L, 3), th=0.012, post=0.9)
+        if cid in SWAN:
+            w['swan'] = True
+        if wing[4] > 0.88:
+            w['big'] = True
+        out['wing'] = w
+    os.makedirs(os.path.join(OUT, 'side'), exist_ok=True)
+    with open(os.path.join(OUT, 'side', cid + '.json'), 'w') as f:
+        json.dump(out, f)
+    return out

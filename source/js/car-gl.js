@@ -246,32 +246,58 @@ void main(){ vec2 q = abs(vQ); float d = max(q.x * 1.0, q.y); float a = (1.0 - s
   };
 
   /* ---------------- Decodificación de los modelos ---------------- */
+  /* Carga progresiva: con 39 coches descodificar todo de golpe congela la portada (≈1,7 s), así que
+     se descodifican de dos en dos con una pausa entre uno y otro, empezando por los que se piden
+     (CG.has de un coche aún sin cargar lo adelanta en la cola). CG.onModel(id) avisa de cada coche
+     listo y CG.onReady cuando están todos. */
+  CG.queue = [];
+  let loading = 0, left = 0;
+  function decode(id) {
+    const rec = TG.CarModels.cars[id];
+    loading++;
+    const done = () => {
+      loading--;
+      if (--left === 0) { CG.ready = true; if (CG.onReady) CG.onReady(); }
+      setTimeout(pump, 16);
+    };
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const c = document.createElement('canvas');
+        c.width = img.width; c.height = img.height;
+        const x = c.getContext('2d', { willReadFrequently: true });
+        x.drawImage(img, 0, 0);
+        const px = x.getImageData(0, 0, img.width, img.height).data;
+        const n = rec.meta.bytes;
+        const bytes = new Uint8Array(n);
+        for (let i = 0, j = 0; i < n; j += 4) { bytes[i++] = px[j]; if (i < n) bytes[i++] = px[j + 1]; if (i < n) bytes[i++] = px[j + 2]; }
+        CG.cars[id] = build(rec.meta, bytes);
+        if (CG.onModel) CG.onModel(id);
+      } catch (e) { console.warn('Modelo ' + id + ' no válido', e); }
+      done();
+    };
+    img.onerror = done;
+    img.src = rec.png;
+  }
+  function pump() {
+    while (loading < 2 && CG.queue.length) decode(CG.queue.shift());
+  }
   CG.load = function () {
-    const cars = TG.CarModels.cars;
-    const ids = Object.keys(cars);
-    let left = ids.length;
-    ids.forEach((id) => {
-      const rec = cars[id];
-      const img = new Image();
-      img.onload = () => {
-        try {
-          const c = document.createElement('canvas');
-          c.width = img.width; c.height = img.height;
-          const x = c.getContext('2d', { willReadFrequently: true });
-          x.drawImage(img, 0, 0);
-          const px = x.getImageData(0, 0, img.width, img.height).data;
-          const n = rec.meta.bytes;
-          const bytes = new Uint8Array(n);
-          for (let i = 0, j = 0; i < n; j += 4) { bytes[i++] = px[j]; if (i < n) bytes[i++] = px[j + 1]; if (i < n) bytes[i++] = px[j + 2]; }
-          CG.cars[id] = build(rec.meta, bytes);
-        } catch (e) { console.warn('Modelo ' + id + ' no válido', e); }
-        if (--left === 0) { CG.ready = true; if (CG.onReady) CG.onReady(); }
-      };
-      img.onerror = () => { if (--left === 0) { CG.ready = true; if (CG.onReady) CG.onReady(); } };
-      img.src = rec.png;
-    });
+    CG.queue = Object.keys(TG.CarModels.cars);
+    left = CG.queue.length;
+    pump();
   };
-  CG.has = (id) => CG.ok && !!CG.cars[id];
+  // adelanta un coche en la cola de carga
+  CG.need = function (id) {
+    const i = CG.queue.indexOf(id);
+    if (i > 0) { CG.queue.splice(i, 1); CG.queue.unshift(id); }
+  };
+  CG.has = (id) => {
+    if (!CG.ok) return false;
+    if (CG.cars[id]) return true;
+    CG.need(id);
+    return false;
+  };
 
   function build(meta, bytes) {
     const L = meta.L;

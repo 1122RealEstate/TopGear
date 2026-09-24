@@ -4,7 +4,7 @@ BASE = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() els
 
 
 def load(car_id):
-    G = {'__name__': 'tg_' + car_id}
+    G = {'__name__': 'tg_' + car_id, 'BASE': BASE}
     for f in ('carlib.py', 'details.py', 'preview.py'):
         p = os.path.join(BASE, f)
         exec(compile(open(p).read(), p, 'exec'), G)

@@ -370,6 +370,7 @@ DIGITS.update({
     'F': [[(0.6, 1.0), (0.0, 1.0), (0.0, 0.0)], [(0.0, 0.52), (0.45, 0.52)]],
     'J': [[(0.6, 1.0), (0.6, 0.15), (0.48, 0.0), (0.12, 0.0), (0.0, 0.15)]],
     '-': [[(0.1, 0.5), (0.52, 0.5)]],
+    'Q': [[(0.0, 0.15), (0.0, 0.85), (0.12, 1.0), (0.48, 1.0), (0.6, 0.85), (0.6, 0.15), (0.48, 0.0), (0.12, 0.0), (0.0, 0.15)], [(0.36, 0.24), (0.66, -0.06)]],
 })
 _FROM_LEFT = (lambda u, v, L: Vector((-20.0, u, v)), Vector((1, 0, 0)))
 
@@ -424,8 +425,109 @@ def open_cockpit(ctx, y0, y1, hw, depth=0.32, seats=(0.3,), wheel_y=None, smooth
             ztop = h[0].z if h else 0.8
             zf = ztop - depth
             yb = y0 + 0.06
-            prof = [(yb, zf), (yb + 0.5, zf), (yb + 0.5, zf + 0.1), (yb + 0.14, zf + 0.12), (yb + 0.06, zf + 0.62), (yb - 0.02, zf + 0.62)]
+            prof = [(yb, zf), (yb + 0.5, zf), (yb + 0.5, zf + 0.1), (yb + 0.14, zf + 0.12), (yb + 0.07, zf + 0.46), (yb - 0.01, zf + 0.46)]
             prism(mb, prof, 'x', x - 0.2, x + 0.2, 'seat')
             if i == 0 and sd > 0 and wheel_y:
                 ring(mb, (x, wheel_y, ztop - 0.04), 'y', 0.16, 0.013, 'black')
                 box(mb, x - 0.02, x + 0.02, wheel_y, min(y1, wheel_y + 0.3), ztop - 0.07, ztop - 0.03, 'black')
+
+
+# ---------------------------------------------------------------- herencia entre fichas
+def inherit(car_id):
+    '''Espacio de nombres de otra ficha (cars/<car_id>.py) para derivar variantes
+    (p. ej. las versiones de carreras): SPEC, funciones de detalle, constantes.'''
+    import os
+    p = os.path.join(globals()['BASE'], 'cars', car_id + '.py')
+    ns = dict(globals())
+    exec(compile(open(p).read(), p, 'exec'), ns)
+    return ns
+
+
+# ---------------------------------------------------------------- pontones (guardabarros separados)
+def pods(mb, top, bot, hw, xc, y0, y1, Rf=0.17, Rr=0.10, n=28, pw=2.6, rear_min=0.3, mat='paint', under='under'):
+    '''Guardabarros cerrados sobre las ruedas, separados del morro (prototipos de Le Mans,
+    barchettas con pontones). top/bot/hw/xc: listas (y, valor) del techo, suelo, semiancho y
+    centro X del pontón; y0 -> y1 con cola que se estrecha (Rr) y punta redondeada (Rf).
+    Se añaden a la malla de la chapa (body 'extra') para tallar en ellos pasos de rueda y faros.'''
+    top, bot, hw, xcf = Curve(top), Curve(bot), Curve(hw), Curve(xc)
+    st = []
+    K = 6
+    for k in range(K, 0, -1):
+        th = (k / K) * math.pi / 2
+        st.append((y0 + Rr - Rr * math.sin(th), max(rear_min, math.cos(th))))
+    m = max(2, int(round((y1 - Rf - (y0 + Rr)) / 0.05)))
+    for i in range(m + 1):
+        st.append((y0 + Rr + (y1 - Rf - y0 - Rr) * i / m, 1.0))
+    for k in range(1, K + 1):
+        th = (k / K) * math.pi / 2
+        st.append((y1 - Rf + Rf * math.sin(th), max(0.07, math.cos(th))))
+    for sd in (1, -1):
+        rings, cens = [], []
+        for (y, s) in st:
+            x0c, zc = xcf(y), (top(y) + bot(y)) / 2
+            a, b = hw(y) * s, (top(y) - bot(y)) / 2 * s
+            ring = []
+            for j in range(n):
+                ph = 2 * math.pi * j / n
+                c, sn = math.cos(ph), math.sin(ph)
+                ring.append(mb.v((sd * (x0c + a * math.copysign(abs(c) ** (2 / pw), c)), y, zc + b * math.copysign(abs(sn) ** (2 / pw), sn))))
+            rings.append(ring)
+            cens.append(Vector((sd * x0c, y, zc)))
+        core = lambda y: min(max(y, y0 + 0.3), y1 - 0.3)
+        for i in range(len(rings) - 1):
+            A, B = rings[i], rings[i + 1]
+            for j in range(n):
+                j1 = (j + 1) % n
+                ph = 2 * math.pi * (j + 0.5) / n
+                q = (A[j], A[j1], B[j1], B[j])
+                mid = sum((v.co for v in q), Vector()) / 4
+                c0 = cens[i].lerp(cens[i + 1], 0.5)
+                mb.f_out(q, under if math.sin(ph) < -0.55 else mat, mid - Vector((c0.x, core(mid.y), c0.z)))
+        for (R, c, dy) in ((rings[0], cens[0], -1), (rings[-1], cens[-1], 1)):
+            cv = mb.v(c + Vector((0, dy * 0.004, 0)))
+            for j in range(n):
+                mb.f_out((cv, R[j], R[(j + 1) % n]), mat, Vector((0, dy, 0)), smooth=False)
+
+
+# ---------------------------------------------------------------- plantilla de compacto (rally, hatchback)
+def box_sec(hw, zb, zt, r=0.5):
+    '''Sección cuadrada de compacto: costado casi vertical, hombro y techo planos. r = redondez (0..1).'''
+    k = 0.04 + 0.08 * r
+    return [(0, zb), (hw * (0.88 - 0.05 * r), zb), (hw * 0.985, zb + 0.04), (hw, zb + 0.14), (hw, zb + 0.30), (hw * 0.997, zb + 0.44),
+            (hw * 0.985, zt - 0.22 - k), (hw * (0.96 - 0.03 * r), zt - 0.10 - k * 0.5), (hw * (0.90 - 0.05 * r), zt - 0.035 - k * 0.2),
+            (hw * 0.70, zt - 0.008), (hw * 0.35, zt), (0, zt)]
+
+
+def hatch(L, W, H, yr, yf, zb=0.16, belt=0.92, hood=0.84, nose=0.74, tail=0.90, flare=0.06, ws=2.72, roof_f=2.25, roof_r=1.0, rw=0.55,
+          cab_w=0.78, cab_t=0.64, r=0.4, tail_zb=0.30, nose_zb=0.15):
+    '''Carrocería y habitáculo de compacto con pasos de rueda ensanchados (flare). Devuelve (body, cabin).
+    ws: base del parabrisas; roof_f / roof_r: principio y fin del techo; rw: base de la luna trasera.'''
+    hw = W / 2
+    ym = (yr + yf) / 2
+    secs = [
+        (0.0, box_sec(hw - flare - 0.03, tail_zb, tail, r)),
+        (yr, box_sec(hw, zb, tail + 0.01, r)),
+        (ym, box_sec(hw - flare, zb, belt, r)),
+        (yf, box_sec(hw, zb, (belt + hood) / 2, r)),
+        (L - 0.28, box_sec(hw - flare * 0.5, zb + 0.01, hood - 0.06, r)),
+        (L, box_sec(hw - flare - 0.05, nose_zb, nose, r)),
+    ]
+    top, bot, wid, keys = abs_keys(secs)
+    body = dict(top=top, bottom=bot, width=wid, keys=keys, corners=(2, 7), mats={0: 'under', 1: 'under'}, r_rear=0.05, r_front=0.06,
+                nose=[(nose_zb, 0.03), (nose_zb + 0.15, 0.0), (nose - 0.12, 0.02), (nose, 0.07)], nose_zone=0.4,
+                nose_x=[(0.0, 0.0), (hw * 0.5, 0.02), (hw * 0.85, 0.08)],
+                tail=[(tail_zb, 0.02), (tail_zb + 0.1, 0.0), (tail, 0.0)], tail_zone=0.3)
+    # habitáculo: de la base de la luna trasera (enterrada en la cola) al parabrisas
+    y0, y1 = rw - 0.1, ws + 0.12
+    roof = [(y0, tail - 0.04), (rw, tail + 0.06), (roof_r - 0.2, H - 0.12), (roof_r, H - 0.01), (roof_r + 0.3, H), (roof_f - 0.25, H),
+            (roof_f, H - 0.03), (roof_f + (ws - roof_f) * 0.55, H - 0.2 * (H - belt) - 0.05), (ws, belt + 0.02), (y1, belt - 0.08)]
+    edge = [(y, z - 0.025 if i not in (0, len(roof) - 1) else z - 0.005) for i, (y, z) in enumerate(roof)]
+    cabin = dict(
+        y0=y0, y1=y1, roof=roof, edge=edge,
+        belt=[(y0, tail - 0.08), (rw, belt - 0.02), (ym, belt), (ws, belt - 0.03), (y1, belt - 0.1)],
+        wb=[(y0, cab_w * 0.8), (rw + 0.3, cab_w), (ws - 0.2, cab_w), (y1, cab_w * 0.9)],
+        wt=[(y0, cab_t * 0.8), (rw + 0.3, cab_t), (roof_f, cab_t), (ws, cab_t * 0.92), (y1, cab_t * 0.85)],
+        zones=[(roof_f, 9, 'glass', None), (roof_r, roof_f, 'paint', None), (rw, roof_r, 'glass', None), (0, rw, 'paint', None)],
+        ys=(roof_f, roof_r, rw),
+    )
+    return body, cabin

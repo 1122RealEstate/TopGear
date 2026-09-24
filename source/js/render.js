@@ -643,7 +643,7 @@
 
   /* ---------- Humo y polvo en el mundo (perspectiva real) ---------- */
   R.partCap = () => ({ low: 140, medium: 240, high: 360, ultra: 480 }[R.quality()] || 360);
-  const FRONT_ENGINE = { mustang: 1, gtr: 1, vantage: 1, amggt: 1 };
+  const FRONT_ENGINE = { mustang: 1, gtr: 1, vantage: 1, amggt: 1, charger: 1, quattro: 1, delta: 1, polowrc: 1, i20wrc: 1, testarossa: 1, clkgtr: 1, beetle: 1 };
   // Objeto destrozado: sus trozos salen despedidos (o polvo y chispas si solo se cae)
   R.smash = function (race, e) {
     if (!race.fx) return;

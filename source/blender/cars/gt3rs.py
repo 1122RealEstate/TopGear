@@ -50,7 +50,7 @@ def _front(ctx):
     light_unit(ctx, [(0.52, 0.465), (0.84, 0.47), (0.845, 0.49), (0.52, 0.487)], 'front', depth=0.015, lens='lens', inside='black', cell=0.012)
     light_unit(ctx, ellipse(0.62, 4.30, 0.125, 0.15, 36), None, depth=0.05, lens='lens', inside='darkchrome', custom=TOPF, cell=0.014)
     # las dos «narices» del capó (salida del radiador central)
-    recess(ctx, [(0.10, 4.02), (0.40, 3.98), (0.44, 4.18), (0.14, 4.24)], 'top', depth=0.05, walls='black', bottom='mesh', smooth=1, cell=0.02)
+    recess(ctx, [(0.10, 4.02), (0.40, 3.98), (0.44, 4.18), (0.14, 4.24)], 'top', depth=0.05, walls='black', bottom='mesh', smooth=2, cell=0.015)
 
 
 def _front_in(ctx):
@@ -61,8 +61,6 @@ def _front_in(ctx):
     led(ctx, [(0.0, 0.64), (0.03, 0.66), (0.03, 0.70), (0.0, 0.71), (-0.03, 0.70), (-0.03, 0.66)], 'front', mat='badge', raise_=0.004, mirror=False)
     for y in (3.36, 3.42, 3.48, 3.54, 3.60, 3.66):
         lightbar(ctx, [(0.58, y), (0.85, y + 0.01)], 0.02, 'top', mat='carbon', raise_=0.02)
-    for x in (0.2, 0.34, 0.48, 0.62):              # aletas verticales del splitter
-        prism(ctx['mb'], [(4.30, 0.13), (4.52, 0.13), (4.50, 0.22), (4.36, 0.24)], 'x', x - 0.004, x + 0.004, 'carbon', mirror=True)
 
 
 B = dict(

@@ -257,7 +257,9 @@
     const img = TG.Art.themePreview(TG.THEMES[themeId], canvas.width, canvas.height);
     canvas.getContext('2d').drawImage(img, 0, 0);
   }
-  const ownedIds = () => TG.CARS.filter((c) => S().cars[c.id]).map((c) => c.id);
+  // coches ordenados por precio (el orden de TG.CARS no se toca: las copas usan sus índices)
+  const byPrice = () => TG._byPrice || (TG._byPrice = TG.CARS.slice().sort((a, b) => a.price - b.price || a.index - b.index));
+  const ownedIds = () => byPrice().filter((c) => S().cars[c.id]).map((c) => c.id);
   function unlockedTracks() {
     const list = [];
     TG.CUPS.forEach((cup, ci) => { if (ci < S().unlocked) cup.tracks.forEach((t) => list.push(t.id)); });
@@ -701,18 +703,19 @@
     render(ctx) {
       ctx.linear = true;
       if (ctx.sel == null) {
-        const firstNew = TG.CARS.find((c) => !S().cars[c.id]);
-        ctx.sel = ctx.params.car || (firstNew ? firstNew.id : TG.CARS[0].id);
+        const firstNew = byPrice().find((c) => !S().cars[c.id]);
+        ctx.sel = ctx.params.car || (firstNew ? firstNew.id : byPrice()[0].id);
       }
       const model = TG.CAR[ctx.sel];
       const owned = !!S().cars[model.id];
       const st = TG.carStats(model, owned ? S().cars[model.id].up : {});
       const can = S().money >= model.price;
-      const idx = model.index;
-      ctx.el.innerHTML = header('Concesionario', (idx + 1) + ' / ' + TG.CARS.length) +
+      const list = byPrice();
+      const idx = list.indexOf(model);
+      ctx.el.innerHTML = header('Concesionario', (idx + 1) + ' / ' + list.length) +
         '<div class="studio-grid"><div class="stage"><div class="stage-bg">' + esc(model.brand.toUpperCase()) + '</div><canvas class="show-lg"></canvas>' +
         '<div class="carousel" data-nav data-key="car" data-adj="1"><i class="arr" data-arrow="-1">◀</i><div class="car-name big"><span>' + esc(model.brand) + '</span>' + esc(model.name) + '</div><i class="arr" data-arrow="1">▶</i></div>' +
-        '<div class="dots">' + TG.CARS.map((c) => '<i class="' + (c.id === model.id ? 'on' : '') + (S().cars[c.id] ? ' own' : '') + '"></i>').join('') + '</div></div>' +
+        '<div class="dots">' + list.map((c) => '<i class="' + (c.id === model.id ? 'on' : '') + (S().cars[c.id] ? ' own' : '') + '"></i>').join('') + '</div></div>' +
         '<div class="studio-side"><div class="price-tag ' + (owned ? 'own' : can ? '' : 'poor') + '"><span>' + (owned ? 'En tu garaje' : 'Precio') + '</span><b>' + (owned ? '✓' : model.price === 0 ? 'Gratis' : money(model.price)) + '</b></div>' +
         '<div class="card"><div class="card-eyebrow">Ficha técnica · de serie</div>' + statBlock(TG.carStats(model, {})) + '</div>' +
         '<p class="desc">' + esc(model.desc) + '</p>' +
@@ -722,7 +725,7 @@
       void st;
       const carEl = $('[data-key="car"]', ctx.el);
       carEl._silent = true;
-      carEl._adjust = (d) => { const i = (model.index + d + TG.CARS.length) % TG.CARS.length; ctx.sel = TG.CARS[i].id; UI.refresh(); };
+      carEl._adjust = (d) => { const i = (idx + d + list.length) % list.length; ctx.sel = list[i].id; UI.refresh(); };
       ctx.onKey = (code) => {
         if (ctx.modal) return false;
         const d = code === 'ArrowLeft' || code === 'KeyA' ? -1 : code === 'ArrowRight' || code === 'KeyD' ? 1 : 0;

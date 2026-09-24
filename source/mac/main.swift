@@ -140,7 +140,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         // Diagnóstico opcional: TG_EVAL="código js" (y TG_QUIT=1 para cerrar después)
         let env = ProcessInfo.processInfo.environment
         if let js = env["TG_EVAL"] {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            let delay = Double(env["TG_EVAL_DELAY"] ?? "") ?? 2.0
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                 webView.evaluateJavaScript(js) { result, error in
                     print("TG_EVAL_RESULT \(result.map { "\($0)" } ?? "nil") \(error.map { "ERROR \($0)" } ?? "")")
                     fflush(stdout)

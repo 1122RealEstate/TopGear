@@ -44,11 +44,12 @@ DIFICULTAD
 DINERO, MEJORAS Y COCHES
 - Garaje: elige el coche con el que compites, píntalo (gratis) y entra al Taller.
 - Taller de mejoras: Motor, Turbo, Transmisión, Neumáticos, Nitro, Depósito y Chasis.
-- Concesionario: 15 coches, desde el Ford Mustang GT inicial hasta el Bugatti Chiron
-  Super Sport (490 km/h): Nissan GT-R Nismo, Aston Martin Vantage y Valkyrie,
-  Mercedes-AMG GT R, Porsche 911 Turbo S, Audi R8 V10, Lamborghini Huracán EVO y
-  Aventador SVJ, McLaren 720S, Ferrari F8 Tributo y LaFerrari, Bugatti Veyron 16.4,
-  Koenigsegg Jesko y Bugatti Chiron Super Sport.
+- Concesionario: 39 coches ordenados por precio, desde el Ford Mustang GT inicial hasta el
+  Bugatti Chiron Super Sport (490 km/h). Además de los superdeportivos (Ferrari, Lamborghini,
+  McLaren, Porsche, Aston Martin, Koenigsegg, Bugatti, Devel) hay clásicos (Ferrari F40 y
+  250 Testa Rossa, Dodge Charger 1970), coches de rally (Audi Quattro S1, Lancia Delta
+  Integrale, Polo R WRC, Hyundai i20 WRC) y de Le Mans (Porsche 917K, Mazda 787B,
+  Mercedes CLK GTR, Ferrari 499P, Cadillac GTP). Todos están modelados en 3D con Blender.
 - En cada copa verás la velocidad de los rivales: si tu coche no llega, mejora el motor
   o compra uno más rápido.
 

@@ -11,7 +11,8 @@
     TG.Save.load();
     TG.Input.init();
     TG.Render.init(document.getElementById('game'));
-    if (TG.CarGL && TG.CarGL.init()) TG.CarGL.onReady = () => { if (G.race) { G.race.cars.forEach((c) => TG.Render.prepCar(G.race, c)); if (G.race.ghostCar) TG.Render.prepCar(G.race, G.race.ghostCar); } };
+    // los modelos 3D se cargan de uno en uno: cada coche de la carrera pasa a 3D en cuanto su modelo está listo
+    if (TG.CarGL && TG.CarGL.init()) TG.CarGL.onModel = (id) => { if (G.race) G.race.cars.concat(G.race.ghostCar || []).forEach((c) => { if (c.model.id === id) TG.Render.prepCar(G.race, c); }); };
     TG.UI.init();
     TG.Input.on(G.onKey);
     G.startDemo();
