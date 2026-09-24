@@ -35,7 +35,7 @@
     carbon: { base: [0.085, 0.09, 0.105], f0: 0.05, refl: 0.6, spec: 0.8, shin: 50, diff: 1 },
     louver: { base: [0.06, 0.068, 0.085], f0: 0.06, refl: 0.6, spec: 0.8, shin: 60, diff: 1 },
     light: { base: [0.7, 0.03, 0.07], f0: 0.08, refl: 0.7, spec: 1.3, shin: 90, diff: 1, emit: 0.18 },
-    tire: { base: [0.13, 0.133, 0.145], f0: 0.02, refl: 0.12, spec: 0.12, shin: 12, diff: 1 },
+    tire: { base: [0.17, 0.173, 0.185], f0: 0.02, refl: 0.12, spec: 0.12, shin: 12, diff: 1 },
     well: { base: [0.018, 0.02, 0.024], f0: 0, refl: 0, spec: 0, shin: 1, diff: 0.4 },
   };
 
@@ -184,7 +184,7 @@
       const y0 = Math.min(yl + 0.003, y1 - 0.002);
       const cb = Math.min(hw * 0.8, cabB), ct = Math.min(cb * 0.94, cabT);
       const all = [
-        [hw * 0.9, y0], [hw * 0.955, y0 + (y1 - y0) * 0.5], [hw * 0.985, y1], [hw * 0.997, (y1 + y2) / 2], [hw, y2],
+        [hw * 0.84, y0], [hw * 0.915, y0 + (y1 - y0) * 0.5], [hw * 0.968, y1], [hw * 0.992, (y1 + y2) / 2], [hw, y2],
         [hw * 0.993, (y2 + y3) / 2], [hw * 0.978, y3], [hw * 0.95, ysh - 0.0028], [hw * 0.906, ysh - 0.0004], [hw * 0.86, ysh + 0.0012],
         [cb, ysh + (hC > 0 ? Math.min(0.0035, hC * 0.3) : hC * 0.3)], [cb + (ct - cb) * 0.5, ysh + hC * 0.52], [ct, ysh + hC * 0.9], [ct * 0.55, ysh + hC * 0.975],
       ];
@@ -323,9 +323,10 @@
     }
     // pasos de rueda (fondo oscuro detrás de cada rueda)
     const wheels = [];
-    [[zFw, 0.05, 1], [zRw, 0.062, 0]].forEach((w) => {
+    [[zFw, 0.064, 1], [zRw, 0.072, 0]].forEach((w) => {
       [-1, 1].forEach((sd) => {
-        const xo = hwAt(w[0]) * 0.93 - 0.004;
+        // delanteras un poco por fuera de la aleta (al girar se ve la goma), traseras al ras del paragolpes
+        const xo = w[2] ? hwAt(w[0]) * 1.08 : hwAt(w[0]) * 1.005;
         wheels.push({ x: sd * (xo - w[1] / 2), z: w[0], r: wr, w: w[1], side: sd, front: w[2] });
         const b = V.length / 3, xw = sd * hwAt(w[0]) * 0.8;
         const ids = [];

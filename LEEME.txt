@@ -35,9 +35,9 @@ MODOS DE JUEGO
 - Contrarreloj: tú contra el crono y contra tu coche fantasma (tu mejor vuelta guardada).
 
 DIFICULTAD
-- Los rivales mejoran poco a poco con cada carrera del campeonato: al principio cometen
-  errores y te esperan; en las últimas copas van más rápido y los mejores defienden su
-  posición. Cada carrera de la copa muestra el nivel de los rivales (1 a 10).
+- Los rivales mejoran poco a poco con cada carrera del campeonato: al principio van más
+  despacio y frenan antes de las curvas; en las últimas copas van más rápido y pasan mejor
+  las curvas. Cada carrera de la copa muestra el nivel de los rivales (1 a 10).
 - Opciones → Dificultad de los rivales: Fácil, Normal o Difícil.
 
 DINERO, MEJORAS Y COCHES

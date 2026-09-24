@@ -65,7 +65,7 @@ Todas las teclas se pueden **reasignar** en *Opciones → Configurar controles d
 <td><img src="docs/screens/drift.jpg" alt="Derrape con humo y marcas de goma"></td>
 </tr>
 <tr>
-<td><b>Dirección y suspensión</b> — al girar, el coche apunta e inclina sutilmente hacia ese lado y se ve la rueda delantera girada; se agacha al acelerar y hunde el morro al frenar.</td>
+<td><b>Giran las ruedas, no la carrocería</b> — al doblar, la carrocería sigue recta y se ven las ruedas delanteras girando hacia ese lado; las cuatro gomas siempre a la vista. Se agacha al acelerar y hunde el morro al frenar.</td>
 <td><b>Derrapes con humo</b> — humo de neumáticos y marcas de goma en el asfalto al forzar en curva, humo de escape y petardeos con llamas al soltar el gas.</td>
 </tr>
 <tr>
@@ -83,8 +83,8 @@ Todas las teclas se pueden **reasignar** en *Opciones → Configurar controles d
 - **Taller**: 7 mejoras por coche — Motor, Turbo, Transmisión, Neumáticos, Nitro, Depósito y Chasis — con vista previa de cómo cambia el rendimiento.
 - **Concesionario**: 15 coches con sus datos reales aproximados, desde el Ford Mustang GT inicial hasta el Bugatti Chiron Super Sport de 490 km/h.
 - **Modos**: carrera rápida, contrarreloj con **coche fantasma** de tu mejor vuelta, y **2 jugadores en pantalla dividida** en el mismo teclado.
-- **Conducción**: dirección progresiva según la velocidad e inercia lateral para un manejo estable, cambio automático o manual, rebufo, saltos en los cambios de rasante, choques y cámara que se abre con el nitro.
-- **Dificultad progresiva**: los 15 rivales mejoran carrera a carrera durante el campeonato (cada carrera muestra su nivel) y en las últimas copas los mejores defienden su posición. En *Opciones* eliges Fácil, Normal o Difícil.
+- **Conducción**: respuesta inmediata y precisa a la dirección (el coche va adonde apuntan las ruedas), cambio automático o manual, rebufo, saltos en los cambios de rasante, choques y cámara que se abre con el nitro.
+- **Dificultad progresiva**: los 15 rivales mejoran carrera a carrera durante el campeonato (van más rápido y pasan mejor las curvas; cada carrera muestra su nivel). En *Opciones* eliges Fácil, Normal o Difícil.
 - **Audio original**: 4 temas musicales propios y motores sintetizados que suenan distinto según sean V6, V8, V10, V12 o W16.
 - **Partida guardada** automáticamente (en la app de Mac se guarda en disco).
 

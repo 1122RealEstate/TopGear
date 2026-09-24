@@ -372,10 +372,12 @@
         const vis = car.vis || ZV;
         // el coche propio lo manda su rumbo (morro hacia donde se gira); la perspectiva lateral apenas influye
         const own = car === p;
-        const yaw = Math.atan(seg.dxv / C.SEG) * (own ? 0.5 : 1) + vis.yaw - Math.atan((cxs - vw / 2) / dK) * (own ? 0.15 : 1);
+        // tu coche va siempre recto (solo giran las ruedas); los demás siguen la curva y la perspectiva, con moderación
+        const yaw = own ? U.clamp(Math.atan(seg.dxv / C.SEG) * 0.25 + vis.yaw, -0.12, 0.12)
+          : U.clamp(Math.atan(seg.dxv / C.SEG) * 0.9 + vis.yaw - Math.atan((cxs - vw / 2) / dK) * 0.55, -0.3, 0.3);
         const ratio = Math.max(0, (ry - horizon) / dK);
-        R.car(ctx, race, v, car, cxs, ry, sc * K, seg.clip, fogA, car === p, night, wet, vw, horizon, yaw,
-          U.clamp(0.03 + 0.11 * ratio, 0.03, 0.14), 2.4 + 3 * Math.max(0, 1 - ratio));
+        R.car(ctx, race, v, car, cxs, ry, sc * K, seg.clip, fogA, own, night, wet, vw, horizon, yaw,
+          U.clamp(0.04 + 0.17 * ratio, 0.04, 0.19), 2.6 + 2.8 * Math.max(0, 1 - ratio));
       }
       if (R.pb[seg.index]) R.drawParts(ctx, race, R.pb[seg.index], seg, K, fogA, vh);
     }
