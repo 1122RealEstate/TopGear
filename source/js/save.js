@@ -17,7 +17,7 @@
       cups: TG.CUPS.map(() => ({ trophy: 0, run: null })),
       records: {},
       ghosts: {},
-      settings: { music: 0.6, sfx: 0.85, quality: 'high', units: 'kmh', trans: 'auto', camera: 'near', fps: false },
+      settings: { music: 0.6, sfx: 0.85, quality: 'high', units: 'kmh', trans: 'auto', camera: 'near', fps: false, difficulty: 'normal' },
       keys: TG.Input.defaultKeys(),
       stats: { races: 0, wins: 0, earned: 0 },
       quick: { track: 'vegas', laps: 3, rivals: 11 },

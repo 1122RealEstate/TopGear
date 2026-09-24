@@ -357,6 +357,16 @@
     }, ids.length < 2 ? 'single' : '');
   }
 
+  // nivel de los rivales (1-10) de un circuito según el avance y la dificultad elegida
+  function rivalLevel(t) {
+    const D = TG.DIFFICULTY[S().settings.difficulty] || TG.DIFFICULTY.normal;
+    return 1 + Math.round(U.clamp(TG.raceLevel(t) + D.off, 0, 1) * 9);
+  }
+  function lvlBar(t) {
+    const n = rivalLevel(t);
+    return '<span class="lvl" title="Nivel de los rivales">Rivales <i style="--l:' + n * 10 + '%"></i><b>' + n + '/10</b></span>';
+  }
+
   SCREENS.cup = {
     render(ctx) {
       ctx.linear = true;
@@ -376,7 +386,7 @@
         return '<div class="track-row ' + (ti === nextIdx ? 'next' : '') + (done ? ' done' : '') + '">' +
           '<canvas class="tr-thumb" width="200" height="112" data-theme="' + t.theme + '"></canvas>' +
           '<div class="tr-body"><div class="tr-num">Carrera ' + (ti + 1) + '</div><div class="tr-name">' + esc(t.name) + '</div>' +
-          '<div class="tr-meta">' + TG.TIME_LABEL[th.time] + ' · ' + TG.WEATHER_LABEL[th.weather] + ' · 3 vueltas</div></div>' +
+          '<div class="tr-meta">' + TG.TIME_LABEL[th.time] + ' · ' + TG.WEATHER_LABEL[th.weather] + ' · 3 vueltas</div>' + lvlBar(t) + '</div>' +
           '<div class="tr-res">' + (done ? '<b>' + res + 'º</b><span>resultado</span>' : rec && rec.lap ? '<b>' + U.timeShort(rec.lap) + '</b><span>mejor vuelta</span>' : '<span class="muted">—</span>') + '</div></div>';
       }).join('');
       let right = '';
@@ -447,7 +457,7 @@
     const t = TG.TRACKS[tid], th = TG.THEMES[t.theme], cup = TG.CUPS[t.cup];
     return '<div class="card preview"><canvas class="pv" width="640" height="340" data-theme="' + t.theme + '"></canvas>' +
       '<div class="pv-info"><span class="flag-slot" data-flag="' + cup.flag + '"></span><div><div class="pv-name">' + esc(t.name) + '</div><div class="pv-meta">' +
-      esc(cup.name) + ' · ' + TG.TIME_LABEL[th.time] + ' · ' + TG.WEATHER_LABEL[th.weather] + '</div></div></div></div>';
+      esc(cup.name) + ' · ' + TG.TIME_LABEL[th.time] + ' · ' + TG.WEATHER_LABEL[th.weather] + '</div>' + lvlBar(t) + '</div></div></div>';
   }
   function fillPreview(el) {
     $$('.pv', el).forEach((c) => thumbInto(c, c.dataset.theme));
@@ -744,6 +754,7 @@
         adjRow('sfx', 'Volumen de efectos', vol(st.sfx), (d) => { st.sfx = U.clamp(Math.round((st.sfx + d * 0.1) * 10) / 10, 0, 1); TG.Audio.apply(); TG.Audio.play('coin'); TG.Save.save(); UI.refresh(); }),
         adjRow('quality', 'Calidad gráfica', QL[st.quality], (d) => { cyc('quality', ['low', 'medium', 'high', 'ultra'], d); TG.Save.save(); TG.Render.resize(); TG.Game.qualityChanged(); UI.refresh(); }),
         adjRow('units', 'Unidades', st.units === 'mph' ? 'mph' : 'km/h', (d) => { cyc('units', ['kmh', 'mph'], d); TG.Save.save(); UI.refresh(); }),
+        adjRow('difficulty', 'Dificultad de los rivales', (TG.DIFFICULTY[st.difficulty] || TG.DIFFICULTY.normal).name, (d) => { cyc('difficulty', ['easy', 'normal', 'hard'], d); TG.Save.save(); UI.refresh(); }),
         adjRow('trans', 'Cambio de marchas', st.trans === 'manual' ? 'Manual' : 'Automático', (d) => { cyc('trans', ['auto', 'manual'], d); TG.Save.save(); UI.refresh(); }),
         adjRow('camera', 'Cámara', st.camera === 'far' ? 'Lejana' : 'Cercana', (d) => { cyc('camera', ['near', 'far'], d); TG.Save.save(); UI.refresh(); }),
         adjRow('fps', 'Mostrar FPS', st.fps ? 'Sí' : 'No', () => { st.fps = !st.fps; TG.Save.save(); UI.refresh(); }),
@@ -753,6 +764,7 @@
         '<div class="opt-side"><button class="btn" data-nav data-key="controls">Configurar controles del teclado</button>' +
         '<button class="btn" data-nav data-key="full">Pantalla completa</button>' +
         '<div class="card help"><div class="card-eyebrow">Consejos</div><ul>' +
+        '<li><b>Dificultad</b>: los rivales mejoran poco a poco con cada carrera del campeonato; aquí eliges el punto de partida.</li>' +
         '<li><b>Calidad</b>: si notas tirones, baja a Media o Baja.</li><li><b>Cambio manual</b>: sube de marcha cerca del corte (la marcha parpadea) para ganar aceleración.</li>' +
         '<li><b>Cámara lejana</b>: ves mejor las curvas que vienen.</li><li>Pulsa <kbd>M</kbd> en cualquier momento para silenciar la música.</li></ul></div>' +
         '<button class="btn danger" data-nav data-key="reset">Borrar la partida</button></div></div>' +

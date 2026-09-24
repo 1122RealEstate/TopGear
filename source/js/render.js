@@ -26,31 +26,60 @@
     R.drawDist = C.DRAW[R.quality()] || 300;
   };
 
-  R.carSprites = function (model, color, w, light, shade) {
-    const key = model.id + color + w + '|' + light + shade;
-    let s = R.carCache.get(key);
-    if (s) return s;
-    if (R.carCache.size > 70) R.carCache.clear();
-    s = {
-      L: Art.carRear(model, color, { w, flank: -0.7, light, shade }),
-      C: Art.carRear(model, color, { w, flank: 0, light, shade }),
-      R: Art.carRear(model, color, { w, flank: 0.7, light, shade }),
+  /* ---------- Coches 3D ---------- */
+  const C3 = TG.Car3D;
+  const YAW_STEP = 0.065, YAW_MAX = 6;                 // fotogramas cacheados de −0,39 a +0,39 rad
+  const SPR_PITCH = 0.06, SPR_DIST = 4.5;
+  const CAR_UNITS = (C.CAR_W * C.ROAD_W) / 0.425;      // unidades de mundo por largo de coche
+  const ZV = { yaw: 0, roll: 0, pitch: 0, heave: 0, steer: 0, blur: 1 };
+  R.CAR_UNITS = CAR_UNITS;
+  R.liveBudget = () => ({ low: 0, medium: 1, high: 2, ultra: 3 }[R.quality()] || 2);
+
+  R.prepCar = function (race, car) {
+    const q = R.qScale();
+    const g = C3.geometry(car.model);
+    const tex = C3.textures(car.model, car.color, race.theme, car.isPlayer ? 380 + 520 * q : 170 + 200 * q);
+    const dc = tex.decal;
+    const sX = g.hwTail / dc.bw2, sY = g.yTail / (dc.GY - dc.yDeck);
+    car.c3 = {
+      tex, frames: new Map(),
+      exh: dc.exh.map((e) => ({ x: ((e[0] - dc.cx) * sX * CAR_UNITS) / C.ROAD_W, h: (dc.GY - e[1]) * sY * CAR_UNITS })),
+      wheelX: (Math.abs(g.wheels[2].x) * CAR_UNITS) / C.ROAD_W,
+      rearZ: g.wheels[2].z * CAR_UNITS,
+      frontZ: g.wheels[0].z * CAR_UNITS,
     };
-    R.carCache.set(key, s);
-    return s;
+    R.carFrame(car, 0, true);
+  };
+
+  // Imagen cacheada del coche para una guiñada (coches pequeños en pantalla)
+  R.carFrame = function (car, idx, force) {
+    const fr = car.c3.frames;
+    let f = fr.get(idx);
+    if (f) return f;
+    if (!force && R.sprBudget <= 0) {
+      for (let d = 1; d <= YAW_MAX * 2; d++) {
+        const a = idx - Math.sign(idx) * d, b = idx + Math.sign(idx) * d;
+        if (fr.has(a)) return fr.get(a);
+        if (fr.has(b)) return fr.get(b);
+      }
+    }
+    R.sprBudget--;
+    f = C3.sprite(car.model, car.c3.tex, car.c3.env || R.env, idx * YAW_STEP, R.sprPPL * (car.ghost ? 2.6 : 1), SPR_PITCH, SPR_DIST);
+    fr.set(idx, f);
+    return f;
   };
 
   R.prepare = function (race) {
     const q = R.qScale();
     race.sprites = Art.themeSprites(race.theme, q);
     race.layers = Art.layers(race.theme, q);
-    const light = race.theme.ambient, shade = race.theme.shade;
-    const baseW = Math.round(380 * q + 80);
-    race.cars.forEach((car) => {
-      const w = car.isPlayer ? Math.round(baseW * 1.55) : baseW;
-      car.spr = R.carSprites(car.model, car.color, w, light, shade);
-    });
-    if (race.ghostCar) race.ghostCar.spr = R.carSprites(race.ghostCar.model, race.ghostCar.color, baseW, light, shade);
+    race.env3d = R.env = C3.env(race.theme);
+    R.sprW = Math.round((92 + 36 * q) * R.dpr);
+    R.sprPPL = (R.sprW * 1.3) / 0.43;
+    R.sprBudget = 99;
+    race.cars.forEach((car) => R.prepCar(race, car));
+    if (race.ghostCar) R.prepCar(race, race.ghostCar);
+    race.fx = { parts: [], skids: [], acc: 0 };
     race.views.forEach((v) => { v.parts = []; v.rain = null; v.snow = null; v.skyOff = 0; v.flash = 0; v.nextBolt = 6 + Math.random() * 8; });
     R.drawDist = C.DRAW[R.quality()] || 300;
   };
@@ -174,7 +203,7 @@
       s.cars.push(car);
     }
     const g = race.ghostCar;
-    if (g && g.visible && g.spr) {
+    if (g && g.visible && g.c3) {
       const s = T.findSegment(g.z);
       if (s.cars.length === 0) R.carSegs.push(s);
       s.cars.push(g);
@@ -182,8 +211,11 @@
     for (let i = 0; i < R.carSegs.length; i++) if (R.carSegs[i].cars.length > 1) R.carSegs[i].cars.sort((a, b) => b.z - a.z);
   };
 
+  R.fid = 0;
   R.frame = function (race, dt) {
     R.t += dt;
+    R.sprBudget = 3;
+    if (race.fx) R.fxUpdate(race, dt);
     const ctx = R.ctx, W = R.W, H = R.H;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalAlpha = 1;
@@ -203,6 +235,7 @@
 
   R.view = function (race, v, vx, vy, vw, vh, dt) {
     const ctx = R.ctx;
+    R.fid++;
     const T = race.track, theme = race.theme, segs = T.segments, N = T.N, L = T.length;
     const p = v.player, cam = v.cam;
     const depth = 1 / Math.tan(((cam.fov / 2) * Math.PI) / 180);
@@ -240,12 +273,17 @@
       seg.clip = maxy;
       proj(seg.p1, camX - x, camY, cz, depth, vw, horizon, K);
       proj(seg.p2, camX - x - dx, camY, cz, depth, vw, horizon, K);
+      seg.dxv = dx;
       x += dx; dx += seg.curve;
       seg.vis = seg.p1.camera.z > depth;
       if (seg.p1.camera.z <= depth || seg.p2.screen.y >= seg.p1.screen.y || seg.p2.screen.y >= maxy) continue;
+      seg.drawn = R.fid;
       R.segment(ctx, vw, seg, maxy, pal, theme);
       maxy = seg.p2.screen.y;
     }
+
+    R.drawSkids(ctx, race, v, K);
+    R.bucket(race, N);
 
     // ---------- sprites, objetos y coches (de lejos a cerca)
     const night = theme.ambient < 0.75;
@@ -254,6 +292,8 @@
     const fx = Art.fx();
     const glowLamp = Art.glow('#ffd79a');
     const RW = C.ROAD_W;
+    const dK = depth * K;
+    R.liveLeft = R.liveBudget();
     for (let n = dd - 1; n > 0; n--) {
       const seg = segs[(base.index + n) % N];
       if (!seg.vis) continue;
@@ -327,9 +367,19 @@
         const rx = U.lerp(s1.x, s2.x, pct);
         const ry = U.lerp(s1.y, s2.y, pct);
         const hw = U.lerp(s1.w, s2.w, pct);
-        R.car(ctx, race, v, car, rx + car.x * hw, ry, sc * K, seg.clip, fogA, car === p, night, wet, vw, horizon);
+        const cxs = rx + car.x * hw;
+        // guiñada aparente = rumbo de la carretera + rumbo propio − ángulo de visión
+        const vis = car.vis || ZV;
+        // el coche propio lo manda su rumbo (morro hacia donde se gira); la perspectiva lateral apenas influye
+        const own = car === p;
+        const yaw = Math.atan(seg.dxv / C.SEG) * (own ? 0.5 : 1) + vis.yaw - Math.atan((cxs - vw / 2) / dK) * (own ? 0.15 : 1);
+        const ratio = Math.max(0, (ry - horizon) / dK);
+        R.car(ctx, race, v, car, cxs, ry, sc * K, seg.clip, fogA, car === p, night, wet, vw, horizon, yaw,
+          U.clamp(0.03 + 0.11 * ratio, 0.03, 0.14), 2.4 + 3 * Math.max(0, 1 - ratio));
       }
+      if (R.pb[seg.index]) R.drawParts(ctx, race, R.pb[seg.index], seg, K, fogA, vh);
     }
+    R.unbucket(race);
 
     R.particles(ctx, race, v, dt, vw, vh);
     R.weather(ctx, race, v, dt, vw, vh, horizon);
@@ -410,85 +460,278 @@
     ctx.fillRect(0, horizon, vw, vh - horizon);
   };
 
-  R.car = function (ctx, race, v, car, cx, cy, sK, clipY, fogA, isView, night, wet, vw, horizon) {
-    const imgW = ((C.CAR_W * C.ROAD_W) / 0.88) * sK;
-    if (imgW < 2 || !car.spr) return;
-    const rel = (cx - vw / 2) / (vw / 2);
-    const f = -rel * 1.1 - car.steerVis * 0.5;
-    const spr = f > 0.33 ? car.spr.R : f < -0.33 ? car.spr.L : car.spr.C;
-    const img = spr.img;
-    const dh = imgW * (img.height / img.width);
-    const lift = car.air * sK;
-    const bounce = car.offroad && car.speed > 200 ? Math.sin(R.t * 45 + car.z) * imgW * 0.008 : Math.sin(R.t * 30 + car.z * 0.01) * imgW * 0.0015 * Math.min(1, car.speed / 3000);
-    const x = cx - imgW / 2, y = cy - dh * spr.ground - lift + bounce;
-    if (y > clipY) return;
+  R.car = function (ctx, race, v, car, cx, cy, sK, clipY, fogA, isView, night, wet, vw, horizon, yaw, cpitch, cdist) {
+    const ppl = CAR_UNITS * sK;
+    const wpx = ppl * 0.43;
+    if (wpx < 1.5 || !car.c3) return;
+    if (cy - ppl * 0.34 > clipY) return;
+    const vis = car.vis || ZV;
     const fx = Art.fx();
     const alpha = (1 - fogA * 0.85) * (car.ghost ? 0.42 : 1);
-    // sombra
-    if (!car.ghost) {
-      ctx.globalAlpha = 0.6 * alpha * (1 - Math.min(0.6, car.air / 500));
-      ctx.drawImage(fx.shadow, cx - imgW * 0.56, cy - imgW * 0.075, imgW * 1.12, imgW * 0.17);
-    }
+    const lift = car.air * sK;
     // faros del coche del jugador (noche)
     if (isView && night && race.theme.headlights) {
       ctx.globalCompositeOperation = 'lighter';
       ctx.globalAlpha = 0.55;
       const topY = horizon + (cy - horizon) * 0.1;
-      const botY = cy - dh * 0.42;
-      const bw = imgW * 2.2;
+      const botY = cy - ppl * 0.16;
+      const bw = wpx * 2.2;
       ctx.drawImage(fx.cone, cx - bw / 2, topY, bw, botY - topY);
       ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
     }
-    ctx.globalAlpha = alpha;
-    let clipH = 0;
-    if (y + dh > clipY) clipH = y + dh - clipY;
-    if (isView && clipH === 0) {
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate(car.steer * 0.022 + (car.crashT > 0 ? Math.sin(R.t * 50) * 0.02 : 0));
-      ctx.drawImage(img, -imgW / 2, -dh * spr.ground - lift + bounce, imgW, dh);
-      ctx.restore();
-      v.carScreen = { x: cx, y: cy - lift, w: imgW, h: dh, gy: spr.ground, exh: spr.exh.map((E) => [x + E[0] * imgW, y + E[1] * dh]) };
+    const needClip = cy + 2 > clipY;
+    if (needClip) { ctx.save(); ctx.beginPath(); ctx.rect(-10, -10, vw + 20, clipY + 10); ctx.clip(); }
+    const live = isView || (!car.ghost && R.liveLeft > 0 && wpx > R.sprW);
+    let lights, exh, s = 1, lx = 0, ly = 0;
+    if (live) {
+      if (!isView) R.liveLeft--;
+      const shake = isView && car.crashT > 0 ? Math.sin(R.t * 50) * 0.02 : 0;
+      const m = C3.draw(ctx, car.model, car.c3.tex, race.env3d,
+        { yaw: yaw + shake, roll: vis.roll, pitch: vis.pitch, heave: vis.heave, steer: vis.steer, blur: vis.blur },
+        { x: cx, y: cy, ppl, pitch: cpitch, dist: cdist, lift, alpha, lod: isView ? 0 : 1, shadow: car.ghost ? 0 : 0.62 * (1 - Math.min(0.6, car.air / 500)) });
+      lights = m.lights; exh = m.exh;
+      if (isView) v.carScreen = { x: cx, y: cy - lift, w: wpx, h: ppl * 0.3, exh };
     } else {
-      ctx.drawImage(img, 0, 0, img.width, img.height * (1 - clipH / dh), x, y, imgW, dh - clipH);
+      const idx = U.clamp(Math.round(yaw / YAW_STEP), -YAW_MAX, YAW_MAX);
+      const f = R.carFrame(car, idx);
+      s = ppl / f.ppl;
+      lx = cx; ly = cy - lift;
+      ctx.globalAlpha = alpha;
+      const rot = vis.roll * 0.7;
+      if (rot) {
+        ctx.save(); ctx.translate(lx, ly); ctx.rotate(rot);
+        ctx.drawImage(f.img, -f.ax * s, -f.ay * s, f.img.width * s, f.img.height * s);
+        ctx.restore();
+      } else ctx.drawImage(f.img, lx - f.ax * s, ly - f.ay * s, f.img.width * s, f.img.height * s);
+      ctx.globalAlpha = 1;
+      lights = f.lights; exh = f.exh;
     }
-    ctx.globalAlpha = 1;
-    if (clipH > dh * 0.3 || car.ghost) return;
+    if (needClip) ctx.restore();
+    if (car.ghost || cy - ppl * 0.12 > clipY) return;
+    const P = (L) => (live ? L : [lx + L[0] * s, ly + L[1] * s, L[2] * s]);
     // luces traseras / freno
     const brake = car.braking;
     if (night || brake) {
       ctx.globalCompositeOperation = 'lighter';
       const g = Art.glow('#ff2438');
-      ctx.globalAlpha = (brake ? 0.95 : 0.5) * alpha;
-      for (let i = 0; i < spr.lights.length; i++) {
-        const Lt = spr.lights[i];
-        const lx = x + Lt[0] * imgW, ly = y + Lt[1] * dh, r = Lt[2] * imgW * (brake ? 2.4 : 1.7);
-        ctx.drawImage(g, lx - r, ly - r, r * 2, r * 2);
+      const a0 = (brake ? 0.95 : 0.5) * alpha;
+      for (let i = 0; i < lights.length; i++) {
+        const Lt = P(lights[i]);
+        const r = Lt[2] * (brake ? 2.6 : 1.8);
+        ctx.globalAlpha = a0;
+        ctx.drawImage(g, Lt[0] - r, Lt[1] - r, r * 2, r * 2);
         if (wet && night) {
           ctx.globalAlpha = 0.22 * alpha;
-          ctx.drawImage(R.tinted(fx.streak, '#ff3040'), lx - r * 0.2, cy, r * 0.4, imgW * 0.45);
-          ctx.globalAlpha = (brake ? 0.95 : 0.5) * alpha;
+          ctx.drawImage(R.tinted(fx.streak, '#ff3040'), Lt[0] - r * 0.2, cy, r * 0.4, wpx * 0.45);
         }
       }
       ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = 'source-over';
     }
-    // llamas de nitro
-    if (car.nitroT > 0) {
+    // llamas: nitro (azul) y petardeo (naranja)
+    const bf = car.backfire > 0;
+    if (car.nitroT > 0 || bf) {
       ctx.globalCompositeOperation = 'lighter';
-      const gb = Art.glow('#3a8aff');
-      for (let i = 0; i < spr.exh.length; i++) {
-        const E = spr.exh[i];
-        const ex = x + E[0] * imgW, ey = y + E[1] * dh;
-        const wid = E[2] * imgW * 2.6;
-        const len = imgW * (0.14 + Math.random() * 0.1);
+      const gb = Art.glow(bf && car.nitroT <= 0 ? '#ff8a2a' : '#3a8aff');
+      const flame = bf && car.nitroT <= 0 ? R.tinted(fx.flame, '#ffb050') : fx.flame;
+      for (let i = 0; i < exh.length; i++) {
+        const E = P(exh[i]);
+        const wid = Math.max(2, E[2] * 2.6);
+        const len = wpx * (bf && car.nitroT <= 0 ? 0.05 + Math.random() * 0.06 : 0.14 + Math.random() * 0.1);
         ctx.globalAlpha = 0.85 * alpha;
-        ctx.drawImage(gb, ex - wid * 1.8, ey - wid * 1.8, wid * 3.6, wid * 3.6);
-        ctx.drawImage(fx.flame, ex - wid / 2, ey - wid * 0.2, wid, len);
+        ctx.drawImage(gb, E[0] - wid * 1.8, E[1] - wid * 1.8, wid * 3.6, wid * 3.6);
+        ctx.drawImage(flame, E[0] - wid / 2, E[1] - wid * 0.2, wid, len);
       }
       ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = 'source-over';
     }
+  };
+
+  /* ---------- Humo y polvo en el mundo (perspectiva real) ---------- */
+  R.partCap = () => ({ low: 140, medium: 240, high: 360, ultra: 480 }[R.quality()] || 360);
+  R.puff = function (race, o) {
+    const P = race.fx.parts;
+    if (P.length >= R.partCap()) return;
+    o.max = o.life;
+    P.push(o);
+  };
+  R.fxUpdate = function (race, dt) {
+    const fx = race.fx;
+    if (!dt) return;
+    const L = race.track.length;
+    const th = race.theme;
+    const wet = th.wet || th.weather === 'rain';
+    const snowy = th.weather === 'snow';
+    const dustC = U.lum(th.grass[0]) > 0.72 ? '#ffffff' : U.mix(th.grass[1], '#c8b89a', 0.35);
+    // el humo se tiñe con la luz del escenario (más oscuro y azulado de noche)
+    const dim = (c) => (th.ambient >= 0.95 ? c : U.mix(c, th.shade, (1 - th.ambient) * 0.75));
+    const smokeC = dim('#eceef2'), exhC = dim('#c9ccd4'), exhD = dim('#6c6f78'), sprayC = dim(snowy ? '#f4f8ff' : '#c4cfdc');
+    const players = race.players;
+    const running = race.phase !== 'intro' && !race.demo;
+    for (let i = 0; i < race.cars.length; i++) {
+      const c = race.cars[i];
+      if (!c.c3) continue;
+      // solo cerca de algún jugador
+      let near = false;
+      for (let j = 0; j < players.length && !near; j++) {
+        let dz = c.z - players[j].z;
+        if (dz > L / 2) dz -= L; else if (dz < -L / 2) dz += L;
+        if (dz > -2500 && dz < 14000) near = true;
+      }
+      if (!near) continue;
+      const sp = c.speed / c.st.vmax;
+      const E = c.c3;
+      // escape: ralentí, aceleración fuerte, cambios y petardeos
+      if (race.phase !== 'intro' || c.isPlayer) {
+        let rate = 1.2;
+        if (c.speed < c.st.vmax * 0.06) rate = 7;
+        else if (c.throttle > 0.6 && sp < 0.45) rate = 10 * (1 - sp);
+        if (c.shiftPuff > 0) { rate += 40; c.shiftPuff -= dt; }
+        const dark = c.speed < c.st.vmax * 0.06 ? 0.3 : c.throttle > 0.6 && sp < 0.45 ? 0.55 : 0.25;
+        c.exAcc = (c.exAcc || 0) + rate * dt * (c.isPlayer ? 1 : 0.6);
+        while (c.exAcc >= 1) {
+          c.exAcc -= 1;
+          const e = U.pick(E.exh);
+          if (!e) break;
+          R.puff(race, { k: 's', z: c.z - 30, x: c.x + e.x, h: e.h, vz: c.speed * 0.72 + U.rand(-60, 60), vx: U.rand(-0.05, 0.05), vh: U.rand(40, 120), s: U.rand(80, 120), gs: U.rand(280, 460), life: U.rand(0.7, 1.2), c: dark > 0.5 ? exhD : exhC, a: dark * (c.isPlayer ? 0.8 : 0.6), drag: 1.6 });
+        }
+      }
+      // humo de neumáticos al derrapar o patinar
+      const slip = c.isPlayer ? Math.max(c.slip, c.spinT > 0 ? 1 : 0, c.burn || 0) : c.bumpSmoke || 0;
+      if (slip > 0.22 && !c.offroad && c.air <= 0) {
+        c.tsAcc = (c.tsAcc || 0) + (12 + slip * 40) * dt;
+        while (c.tsAcc >= 1) {
+          c.tsAcc -= 1;
+          const sd = Math.random() < 0.5 ? -1 : 1;
+          const vz = c.speed * U.rand(0.8, 0.97);
+          R.puff(race, { k: 's', z: c.z + E.rearZ * U.rand(0.7, 1.1), x: c.x + sd * E.wheelX * U.rand(1, 1.45), h: U.rand(30, 110), vz, vx: sd * U.rand(0.12, 0.55), vh: U.rand(150, 360), s: U.rand(240, 380), gs: U.rand(900, 1400), life: U.rand(1, 1.7), c: smokeC, a: 0.55 + 0.3 * Math.min(1, slip), drag: 1.5 });
+        }
+      }
+      // polvo fuera de pista
+      if (c.offroad && c.speed > 250) {
+        c.duAcc = (c.duAcc || 0) + 30 * Math.min(1, sp * 1.5) * dt;
+        while (c.duAcc >= 1) {
+          c.duAcc -= 1;
+          const sd = Math.random() < 0.5 ? -1 : 1;
+          R.puff(race, { k: 's', z: c.z + E.rearZ * U.rand(0.3, 1.1), x: c.x + sd * E.wheelX * U.rand(0.8, 1.3), h: U.rand(10, 60), vz: c.speed * U.rand(0.4, 0.7), vx: sd * U.rand(0.1, 0.5), vh: U.rand(60, 260), s: U.rand(160, 260), gs: U.rand(600, 1000), life: U.rand(0.5, 0.9), c: dustC, a: 0.7, drag: 1.8 });
+        }
+      }
+      // agua o nieve levantada por las ruedas
+      if ((wet || snowy) && sp > 0.3 && running) {
+        c.wtAcc = (c.wtAcc || 0) + (c.isPlayer ? 26 : 16) * sp * dt;
+        while (c.wtAcc >= 1) {
+          c.wtAcc -= 1;
+          const sd = Math.random() < 0.5 ? -1 : 1;
+          R.puff(race, { k: 's', z: c.z + U.rand(-20, 120), x: c.x + sd * E.wheelX * U.rand(0.85, 1.15), h: U.rand(10, 50), vz: c.speed * U.rand(0.72, 0.9), vx: sd * U.rand(0.02, 0.2), vh: U.rand(100, 260), s: U.rand(110, 170), gs: U.rand(500, 900), life: U.rand(0.3, 0.5), c: sprayC, a: (snowy ? 0.3 : 0.2) * sp, drag: 2.4 });
+        }
+      }
+    }
+    // integración
+    const P = fx.parts;
+    for (let i = P.length - 1; i >= 0; i--) {
+      const o = P[i];
+      o.life -= dt;
+      if (o.life <= 0) { P[i] = P[P.length - 1]; P.pop(); continue; }
+      o.z = U.increase(o.z, o.vz * dt, L);
+      o.vz *= Math.exp(-o.drag * dt);
+      o.x += o.vx * dt;
+      o.h += o.vh * dt;
+      o.vh *= Math.exp(-1.2 * dt);
+      o.s += o.gs * dt;
+    }
+    // marcas de frenada de los jugadores
+    for (let j = 0; j < players.length; j++) {
+      const c = players[j];
+      if (!c.c3) continue;
+      const on = (c.slip > 0.34 || c.spinT > 0 || c.burn > 0.3) && !c.offroad && c.air <= 0 && c.speed > 120;
+      c.skidOn = on ? c.skidOn : null;
+      if (!on) continue;
+      const z = U.increase(c.z, c.c3.rearZ, L);
+      if (!c.skidOn) {
+        c.skidOn = [{ pts: [], t: race.time }, { pts: [], t: race.time }];
+        fx.skids.push(c.skidOn[0], c.skidOn[1]);
+        while (fx.skids.length > 60) fx.skids.shift();
+      }
+      const last = c.skidOn[0].pts[c.skidOn[0].pts.length - 1];
+      if (last) { let d = z - last.z; if (d < 0) d += L; if (d < 70) continue; }
+      const a = Math.min(1, Math.max(c.slip, c.spinT > 0 ? 1 : 0, c.burn || 0));
+      c.skidOn[0].pts.push({ z, x: c.x - c.c3.wheelX, a });
+      c.skidOn[1].pts.push({ z, x: c.x + c.c3.wheelX, a });
+      if (c.skidOn[0].pts.length > 160) c.skidOn = null;
+    }
+  };
+  // reparte las partículas por segmento para dibujarlas en orden de profundidad
+  R.pb = [];
+  R.bucket = function (race, N) {
+    if (R.pb.length !== N) { R.pb = new Array(N); }
+    const P = race.fx ? race.fx.parts : [];
+    for (let i = 0; i < P.length; i++) {
+      const idx = Math.floor(P[i].z / C.SEG) % N;
+      (R.pb[idx] || (R.pb[idx] = [])).push(P[i]);
+    }
+  };
+  R.unbucket = function (race) {
+    const P = race.fx ? race.fx.parts : [];
+    const N = R.pb.length;
+    for (let i = 0; i < P.length; i++) { const b = R.pb[Math.floor(P[i].z / C.SEG) % N]; if (b) b.length = 0; }
+  };
+  R.drawParts = function (ctx, race, list, seg, K, fogA, vh) {
+    if (!seg.vis) return;
+    const s1 = seg.p1.screen, s2 = seg.p2.screen, L = race.track.length;
+    const fx = Art.fx();
+    for (let i = 0; i < list.length; i++) {
+      const o = list[i];
+      let t = (o.z - seg.p1.world.z) / C.SEG;
+      if (t < 0) t += L / C.SEG;
+      if (t > 1) t = 1;
+      const sc = s1.scale + (s2.scale - s1.scale) * t;
+      const size = o.s * sc * K;
+      if (size < 1.5) continue;
+      const sx = s1.x + (s2.x - s1.x) * t + o.x * (s1.w + (s2.w - s1.w) * t);
+      const sy = s1.y + (s2.y - s1.y) * t - o.h * sc * K;
+      const lf = o.life / o.max;
+      let a = o.a * lf * (1 - fogA * 0.9);
+      if (size > vh * 0.32) a *= Math.max(0, 1 - (size - vh * 0.32) / (vh * 0.45));
+      if (a < 0.01) continue;
+      ctx.globalAlpha = Math.min(1, a * (lf > 0.85 ? (1 - lf) / 0.15 : 1));
+      ctx.drawImage(R.tinted(fx.smoke, o.c), sx - size / 2, sy - size / 2, size, size);
+    }
+    ctx.globalAlpha = 1;
+  };
+  // marcas de neumático sobre el asfalto
+  R.drawSkids = function (ctx, race, v, K) {
+    const fx = race.fx;
+    if (!fx || !fx.skids.length) return;
+    const T = race.track, L = T.length;
+    ctx.fillStyle = '#141416';
+    for (let k = 0; k < fx.skids.length; k++) {
+      const st = fx.skids[k];
+      const age = race.time - st.t;
+      const fade = age > 25 ? Math.max(0, 1 - (age - 25) / 15) : 1;
+      if (fade <= 0) continue;
+      const pts = st.pts;
+      let pa = null;
+      for (let i = 0; i < pts.length; i++) {
+        const q = pts[i];
+        const seg = T.segments[Math.floor(q.z / C.SEG) % T.N];
+        if (seg.drawn !== R.fid) { pa = null; continue; }
+        let t = (q.z - seg.p1.world.z) / C.SEG;
+        if (t < 0) t += L / C.SEG;
+        const s1 = seg.p1.screen, s2 = seg.p2.screen;
+        const w = s1.w + (s2.w - s1.w) * t;
+        const pb = { x: s1.x + (s2.x - s1.x) * t + q.x * w, y: s1.y + (s2.y - s1.y) * t, w: w * 0.028, a: q.a };
+        if (pa && pa.y > pb.y) {
+          ctx.globalAlpha = 0.42 * fade * Math.min(pa.a, pb.a);
+          ctx.beginPath();
+          ctx.moveTo(pa.x - pa.w, pa.y); ctx.lineTo(pa.x + pa.w, pa.y);
+          ctx.lineTo(pb.x + pb.w, pb.y); ctx.lineTo(pb.x - pb.w, pb.y);
+          ctx.closePath(); ctx.fill();
+        }
+        pa = pb;
+      }
+    }
+    ctx.globalAlpha = 1;
   };
 
   /* ---------- Partículas ---------- */
@@ -514,20 +757,9 @@
     if (cs && !race.demo && race.phase !== 'intro') {
       const u = cs.w;
       const sp = p.speed / p.st.vmax;
-      if ((p.slip > 0.35 && sp > 0.3) || p.spinT > 0 || (race.phase === 'count' && p.rpm > p.model.eng.red * 0.9)) {
-        for (let k = -1; k <= 1; k += 2) if (Math.random() < 0.8) R.spawn(v, { k: 'smoke', c: '#e6e6e6', x: cs.x + k * u * 0.33, y: cs.y - u * 0.03, vx: k * u * U.rand(0.1, 0.5), vy: u * U.rand(0.2, 0.6), life: U.rand(0.5, 0.9), s: u * 0.18, gr: u * 0.9, a: 0.45 });
-      }
-      if (p.offroad && p.speed > 250) {
-        const snow = U.lum(race.theme.grass[0]) > 0.72;
-        const col = snow ? '#ffffff' : U.shade(race.theme.grass[1], -0.1);
-        for (let k = -1; k <= 1; k += 2) R.spawn(v, { k: 'smoke', c: col, x: cs.x + k * u * 0.36, y: cs.y - u * 0.02, vx: k * u * U.rand(0.2, 0.9), vy: u * U.rand(-0.2, 0.4), life: U.rand(0.35, 0.7), s: u * 0.14, gr: u * 0.7, a: 0.7 });
-      }
-      if (race.theme.wet && sp > 0.35) {
-        for (let k = -1; k <= 1; k += 2) if (Math.random() < 0.55 * sp) R.spawn(v, { k: 'smoke', c: '#b8c4d4', x: cs.x + k * u * U.rand(0.25, 0.4), y: cs.y - u * 0.04, vx: k * u * U.rand(0.4, 1.2), vy: u * U.rand(0.4, 1.1), life: U.rand(0.3, 0.5), s: u * 0.2, gr: u * 2.4, a: 0.14 * sp });
-      }
       if (p.nitroT > 0 && cs.exh && Math.random() < 0.7) {
         const e = U.pick(cs.exh);
-        R.spawn(v, { k: 'spark', c: '#8fd8ff', x: e[0] + U.rand(-2, 2), y: e[1], vx: U.rand(-0.4, 0.4) * u, vy: U.rand(0.8, 1.8) * u, g: u, life: U.rand(0.12, 0.3), s: u * 0.008 });
+        if (e) R.spawn(v, { k: 'spark', c: '#8fd8ff', x: e[0] + U.rand(-2, 2), y: e[1], vx: U.rand(-0.4, 0.4) * u, vy: U.rand(0.8, 1.8) * u, g: u, life: U.rand(0.12, 0.3), s: u * 0.008 });
       }
     }
     const parts = v.parts;

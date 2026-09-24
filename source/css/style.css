@@ -241,6 +241,10 @@ h2 { margin: 0 0 8px; font: italic 800 30px/1.05 var(--f-display); text-transfor
 .tr-num { font: 700 11px var(--f-data); letter-spacing: .18em; text-transform: uppercase; color: var(--gulf); }
 .tr-name { font: italic 800 26px/1.05 var(--f-display); text-transform: uppercase; }
 .tr-meta { font: 600 12px var(--f-data); color: var(--mute); letter-spacing: .05em; }
+.lvl { display: inline-flex; align-items: center; gap: 7px; margin-top: 5px; font: 700 11px var(--f-data); letter-spacing: .12em; text-transform: uppercase; color: var(--mute); }
+.lvl i { position: relative; width: 58px; height: 6px; border-radius: 3px; background: rgba(255,255,255,.12); overflow: hidden; }
+.lvl i::after { content: ''; position: absolute; inset: 0 auto 0 0; width: var(--l); background: linear-gradient(90deg, var(--ok), var(--gold) 55%, var(--signal)) 0 0 / 58px 100% no-repeat; }
+.lvl b { color: var(--chalk); font-weight: 700; }
 .tr-res { text-align: right; }
 .tr-res b { display: block; font: 700 22px var(--f-data); }
 .tr-res span { font: 600 11px var(--f-data); color: var(--mute); letter-spacing: .1em; text-transform: uppercase; }
@@ -250,6 +254,8 @@ h2 { margin: 0 0 8px; font: italic 800 30px/1.05 var(--f-display); text-transfor
 .cup-side .stats { gap: 6px; }
 .cup-side .row { margin-bottom: 8px; padding: 10px 16px; }
 .cup-side .small { margin: 8px 0 0; }
+.cup-side > * { flex-shrink: 0; }
+.cup-side .warn-txt { font-size: 12px; line-height: 1.35; }
 .prize-list { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
 .prize-list div { background: rgba(255, 255, 255, .04); border-radius: 8px; padding: 6px 4px; text-align: center; }
 .prize-list span { display: block; font: 700 12px var(--f-data); color: var(--mute); }

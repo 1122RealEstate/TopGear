@@ -34,6 +34,12 @@ MODOS DE JUEGO
 - 2 jugadores: duelo en pantalla dividida, con o sin rivales de la CPU.
 - Contrarreloj: tú contra el crono y contra tu coche fantasma (tu mejor vuelta guardada).
 
+DIFICULTAD
+- Los rivales mejoran poco a poco con cada carrera del campeonato: al principio cometen
+  errores y te esperan; en las últimas copas van más rápido y los mejores defienden su
+  posición. Cada carrera de la copa muestra el nivel de los rivales (1 a 10).
+- Opciones → Dificultad de los rivales: Fácil, Normal o Difícil.
+
 DINERO, MEJORAS Y COCHES
 - Garaje: elige el coche con el que compites, píntalo (gratis) y entra al Taller.
 - Taller de mejoras: Motor, Turbo, Transmisión, Neumáticos, Nitro, Depósito y Chasis.
@@ -50,6 +56,8 @@ CONSEJOS
 - Recoge los bidones rojos: sin gasolina el coche apenas avanza.
 - Pégate detrás de un rival para aprovechar el rebufo y adelantarlo.
 - Usa el nitro en las rectas; antes de una curva cerrada suelta un poco el acelerador.
+- Si fuerzas demasiado en curva o frenas girando, el coche derrapa (humo y marcas de
+  goma) y pierde algo de velocidad.
 - Salirte de la carretera frena mucho y chocar contra el decorado aún más.
 - Si notas tirones, baja la calidad gráfica en Opciones.
 

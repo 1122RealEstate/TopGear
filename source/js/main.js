@@ -156,6 +156,7 @@
         case 'spin': if (v) H.msg(v, 'PATINAS: DEMASIADAS RPM', { col: '#ff3b3b', slot: 'low', dur: 1.4 }); break;
         case 'nitro': A.play('nitro'); if (v) { H.msg(v, 'NITRO', { col: '#7fd0ff', dur: 0.9 }); v.cam.shake = Math.max(v.cam.shake, 0.35); } break;
         case 'shift': A.play('shift'); break;
+        case 'backfire': A.play('pop', e.soft ? 0.55 : 1); break;
         case 'lap': {
           if (!v) break;
           const n = e.car.laps.length;

@@ -964,6 +964,14 @@
     });
   });
 
+  // Dificultad: el nivel de los rivales sube carrera a carrera (0 = primera del campeonato, 1 = última)
+  TG.DIFFICULTY = {
+    easy: { name: 'Fácil', off: -0.2, spd: 0.975 },
+    normal: { name: 'Normal', off: 0, spd: 1 },
+    hard: { name: 'Difícil', off: 0.22, spd: 1.02 },
+  };
+  TG.raceLevel = (def) => U.clamp((def.cup * 4 + def.index) / 31, 0, 1);
+
   TG.WEATHER_LABEL = { clear: 'Despejado', rain: 'Lluvia', snow: 'Nieve', fog: 'Niebla' };
   TG.TIME_LABEL = { day: 'Día', sunset: 'Atardecer', dusk: 'Anochecer', night: 'Noche', overcast: 'Nublado' };
 

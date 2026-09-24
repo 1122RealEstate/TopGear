@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <b>El clásico Top Gear, reimaginado con gráficos modernos.</b><br>
+  <b>El clásico Top Gear, reimaginado con coches en 3D y gráficos modernos.</b><br>
   Carreras por 8 países, dinero por cada victoria, taller de mejoras y un concesionario con Bugatti, Ferrari, Lamborghini, Aston Martin y más.
 </p>
 
@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/gameplay.gif" alt="Gameplay: Los Ángeles, Tokio, Helsinki y Venecia" width="820">
+  <img src="docs/gameplay.gif" alt="Gameplay: Tokio de noche, derrape en Los Ángeles, lluvia en Londres y nieve en Helsinki" width="820">
 </p>
 
 ---
@@ -54,11 +54,19 @@ Todas las teclas se pueden **reasignar** en *Opciones → Configurar controles d
 <table>
 <tr>
 <td width="50%"><img src="docs/screens/start.jpg" alt="Salida en Las Vegas"></td>
-<td width="50%"><img src="docs/screens/tokyo.jpg" alt="Tokio de noche"></td>
+<td width="50%"><img src="docs/screens/tokyo.jpg" alt="Coches 3D en Tokio de noche"></td>
 </tr>
 <tr>
-<td><b>Salida al estilo Top Gear</b> — semáforo, cuenta atrás y salida perfecta si mantienes las revoluciones en la zona verde.</td>
-<td><b>Noche con neones y faros</b> — luces de freno, reflejos en el asfalto mojado y haz de los faros sobre la carretera.</td>
+<td><b>Salida al estilo Top Gear</b> — semáforo, cuenta atrás y salida perfecta si mantienes las revoluciones en la zona verde (si te pasas, quemas rueda).</td>
+<td><b>Coches en 3D</b> — cada modelo se genera en 3D a partir de su silueta real: pintura con reflejos del cielo, cristales, llantas con pinzas de freno y los pilotos traseros de cada marca.</td>
+</tr>
+<tr>
+<td><img src="docs/screens/steer.jpg" alt="Giro con la rueda delantera visible"></td>
+<td><img src="docs/screens/drift.jpg" alt="Derrape con humo y marcas de goma"></td>
+</tr>
+<tr>
+<td><b>Dirección y suspensión</b> — al girar, el coche apunta e inclina sutilmente hacia ese lado y se ve la rueda delantera girada; se agacha al acelerar y hunde el morro al frenar.</td>
+<td><b>Derrapes con humo</b> — humo de neumáticos y marcas de goma en el asfalto al forzar en curva, humo de escape y petardeos con llamas al soltar el gas.</td>
 </tr>
 <tr>
 <td><img src="docs/screens/helsinki.jpg" alt="Helsinki con aurora boreal"></td>
@@ -66,7 +74,7 @@ Todas las teclas se pueden **reasignar** en *Opciones → Configurar controles d
 </tr>
 <tr>
 <td><b>Clima y ambientes</b> — nieve con aurora boreal, lluvia con relámpagos, niebla, atardeceres y noches estrelladas.</td>
-<td><b>Monedas, gasolina y nitro</b> — recoge monedas para ganar más dinero y bidones para no quedarte sin combustible.</td>
+<td><b>Noche y lluvia</b> — agua que levantan las ruedas, reflejos de los pilotos en el asfalto mojado y haz de los faros.</td>
 </tr>
 </table>
 
@@ -75,7 +83,8 @@ Todas las teclas se pueden **reasignar** en *Opciones → Configurar controles d
 - **Taller**: 7 mejoras por coche — Motor, Turbo, Transmisión, Neumáticos, Nitro, Depósito y Chasis — con vista previa de cómo cambia el rendimiento.
 - **Concesionario**: 15 coches con sus datos reales aproximados, desde el Ford Mustang GT inicial hasta el Bugatti Chiron Super Sport de 490 km/h.
 - **Modos**: carrera rápida, contrarreloj con **coche fantasma** de tu mejor vuelta, y **2 jugadores en pantalla dividida** en el mismo teclado.
-- **Conducción arcade**: cambio automático o manual, rebufo, saltos en los cambios de rasante, choques, 15 rivales con IA y cámara que se abre con el nitro.
+- **Conducción**: dirección progresiva según la velocidad e inercia lateral para un manejo estable, cambio automático o manual, rebufo, saltos en los cambios de rasante, choques y cámara que se abre con el nitro.
+- **Dificultad progresiva**: los 15 rivales mejoran carrera a carrera durante el campeonato (cada carrera muestra su nivel) y en las últimas copas los mejores defienden su posición. En *Opciones* eliges Fácil, Normal o Difícil.
 - **Audio original**: 4 temas musicales propios y motores sintetizados que suenan distinto según sean V6, V8, V10, V12 o W16.
 - **Partida guardada** automáticamente (en la app de Mac se guarda en disco).
 
@@ -133,7 +142,7 @@ Top Gear.app          app nativa de macOS (Apple Silicon + Intel)
 releases/             Top Gear.app comprimida para descargar
 Jugar en Windows.bat  lanzador para Windows
 source/               código fuente
-  js/                 motor pseudo-3D, física, IA, arte procedural, audio, interfaz
+  js/                 motor pseudo-3D, coches 3D, física, IA, arte procedural, audio, interfaz
   css/                estilos de la interfaz
   mac/                lanzador Swift (WebKit) e icono
   build.js            empaqueta todo en TopGear.html
@@ -146,7 +155,7 @@ Para desarrollar, sirve `source/` con cualquier servidor estático (por ejemplo 
 cd source && ./build_mac.sh
 ```
 
-El juego es JavaScript puro sobre Canvas 2D y Web Audio, sin dependencias.
+El juego es JavaScript puro sobre Canvas 2D y Web Audio, sin dependencias. Los coches se modelan y se sombrean en 3D con código propio (`source/js/car3d.js`), sin WebGL.
 
 ---
 

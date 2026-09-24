@@ -1,7 +1,7 @@
 'use strict';
 /* ============================================================
    Arte procedural de coches
-   - carRear: vista trasera para la carrera (con flanco visible)
+   - rearDecal: detalles del panel trasero (los proyecta el coche 3D)
    - carSide: perfil lateral para garaje / concesionario
    - showroom: escena completa del expositor
    ============================================================ */
@@ -11,105 +11,35 @@
 
   const RED_LIGHT = ['#ff6a72', '#ff1a2c', '#a8000f'];
 
-  /* ---------------- Vista trasera ---------------- */
-  Art.carRear = function (model, color, opt) {
+  /* ---------------- Trasera (calcomanía del coche 3D) ----------------
+     Dibuja solo los detalles del panel trasero (difusor, pilotos, matrícula,
+     emblema, escapes y rejillas) en el espacio 1000×780 del diseño, recortado
+     a la zona útil. Car3D la proyecta sobre el panel trasero de la malla. */
+  Art.rearDecal = function (model, color, opt) {
     opt = opt || {};
-    const W = Math.max(64, Math.round(opt.w || 512));
-    const H = Math.round(W * 0.78);
-    const cv = U.canvas(W, H);
-    const ctx = cv.getContext('2d');
-    const k = W / 1000;
-    ctx.scale(k, k);
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-
     const R = model.rear;
-    const f = U.clamp(opt.flank || 0, -1, 1);
     const L = opt.light == null ? 1 : opt.light;
     const night = L < 0.7;
     const shadeC = opt.shade || '#0a1030';
     const lit = (c) => (L >= 0.999 ? c : U.mix(c, shadeC, (1 - L) * 0.82));
-    const paint = lit(color);
-    const sec = lit(model.sec || '#15171b');
     const carbon = lit('#1a1c21');
     const black = lit('#0a0b0e');
     const GY = 742;
     const bw2 = 440 * R.w;
-    const cx = 500 - f * 16;
+    const cx = 500;
     const yDeck = GY - R.deck * 880;
-    const yRoof = GY - R.h * 880;
     const yBot = GY - 92;
     const Lx = cx - bw2, Rx = cx + bw2;
-    const s = f >= 0 ? 1 : -1, af = Math.abs(f);
+    const x0 = Lx - 24, x1 = Rx + 24, y0 = yDeck - 36, y1 = GY - 14;
+    const k = (opt.w || 512) / (x1 - x0);
+    const cv = U.canvas((x1 - x0) * k, (y1 - y0) * k);
+    const ctx = cv.getContext('2d');
+    ctx.scale(k, k);
+    ctx.translate(-x0, -y0);
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
     const lights = [], exh = [];
-    const ccx = cx + f * 30;
-    const cw = bw2 * R.cabinB, ct = bw2 * R.cabinT;
 
-    // --- Neumáticos
-    const tireW = 132, tireH = 158;
-    const drawTire = (x) => {
-      ctx.fillStyle = U.lin(ctx, x, 0, x + tireW, 0, [0, '#0e0f12', 0.5, '#2a2b30', 1, '#0c0d10']);
-      U.rr(ctx, x, GY - tireH, tireW, tireH, 26);
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(255,255,255,0.05)';
-      ctx.lineWidth = 4;
-      for (let i = 1; i < 5; i++) {
-        const xx = x + (tireW * i) / 5;
-        ctx.beginPath(); ctx.moveTo(xx, GY - tireH + 20); ctx.lineTo(xx, GY - 12); ctx.stroke();
-      }
-    };
-    drawTire(Lx + 20);
-    drawTire(Rx - 20 - tireW);
-
-    // --- Flanco (lateral visible por la perspectiva)
-    if (af > 0.05) {
-      const ex = s > 0 ? Rx : Lx;
-      const dx = s * af * 70, dy = af * 30;
-      const wx = ex - s * 8 + dx * 0.22, wy = GY - tireH * 0.5;
-      ctx.fillStyle = '#0f1013';
-      U.ellipse(ctx, wx, wy, 10 + 18 * af, tireH * 0.49);
-      ctx.fill();
-      ctx.fillStyle = lit('#5c6068');
-      U.ellipse(ctx, wx + s * 3, wy, (10 + 18 * af) * 0.5, tireH * 0.3);
-      ctx.fill();
-      ctx.fillStyle = U.lin(ctx, ex, 0, ex + dx, 0, [0, U.shade(paint, -0.2), 1, U.shade(paint, -0.52)]);
-      ctx.beginPath();
-      ctx.moveTo(ex - s * 26, yDeck + 20);
-      ctx.lineTo(ex + dx, yDeck + 12 - dy);
-      ctx.lineTo(ex + dx * 0.96, yBot - 40 - dy * 0.8);
-      ctx.lineTo(ex - s * 30, yBot - 8);
-      ctx.closePath();
-      ctx.fill();
-      // lateral de la cabina
-      const cex = ccx + s * cw, ctop = ccx + s * (ct + 12);
-      ctx.fillStyle = U.lin(ctx, 0, yRoof, 0, yDeck, [0, lit('#34445e'), 1, lit('#0c121c')]);
-      ctx.beginPath();
-      ctx.moveTo(cex, yDeck + 2);
-      ctx.lineTo(ctop, yRoof + 26);
-      ctx.lineTo(ctop + dx * 0.5, yRoof + 18 - dy * 0.45);
-      ctx.lineTo(cex + dx * 0.7, yDeck - 8 - dy * 0.6);
-      ctx.closePath();
-      ctx.fill();
-    }
-
-    // --- Difusor
-    ctx.fillStyle = U.lin(ctx, 0, yBot - 40, 0, GY - 30, [0, carbon, 1, black]);
-    ctx.beginPath();
-    ctx.moveTo(Lx + 60, yBot - 40); ctx.lineTo(Rx - 60, yBot - 40);
-    ctx.lineTo(Rx - 86, GY - 34); ctx.lineTo(Lx + 86, GY - 34);
-    ctx.closePath();
-    ctx.fill();
-    if (R.fins) {
-      ctx.strokeStyle = lit('#30333b');
-      ctx.lineWidth = 7;
-      const span = bw2 * 0.9;
-      for (let i = 0; i < R.fins; i++) {
-        const xx = cx - span / 2 + (span * (i + 0.5)) / R.fins;
-        ctx.beginPath(); ctx.moveTo(xx, yBot - 24); ctx.lineTo(xx + (xx - cx) * 0.06, GY - 38); ctx.stroke();
-      }
-    }
-
-    // --- Carrocería
     const bodyPath = (begin) => {
       if (begin !== false) ctx.beginPath();
       ctx.moveTo(Lx + 34, yBot);
@@ -124,116 +54,47 @@
       ctx.quadraticCurveTo(cx - bw2 * 0.5, yBot - 34, cx - bw2 * 0.56, yBot);
       ctx.closePath();
     };
-    const cabinPath = (inset, begin) => {
-      const i = inset || 0;
-      if (begin !== false) ctx.beginPath();
-      ctx.moveTo(ccx - cw + i * 1.6, yDeck + 2 - i * 0.3);
-      ctx.lineTo(ccx - ct - 12 + i, yRoof + 26 + i * 0.6);
-      ctx.quadraticCurveTo(ccx - ct + i * 0.5, yRoof + i, ccx - ct + 34, yRoof + i);
-      ctx.lineTo(ccx + ct - 34, yRoof + i);
-      ctx.quadraticCurveTo(ccx + ct - i * 0.5, yRoof + i, ccx + ct + 12 - i, yRoof + 26 + i * 0.6);
-      ctx.lineTo(ccx + cw - i * 1.6, yDeck + 2 - i * 0.3);
-      ctx.closePath();
-    };
 
-    bodyPath();
-    ctx.fillStyle = U.lin(ctx, 0, yDeck - 20, 0, yBot, [0, U.shade(paint, 0.3), 0.18, U.shade(paint, 0.08), 0.55, paint, 1, U.shade(paint, -0.42)]);
+    // --- Difusor
+    // (más estrecho que la carrocería: deja ver los neumáticos traseros en las esquinas)
+    ctx.fillStyle = U.lin(ctx, 0, yBot - 62, 0, GY - 30, [0, carbon, 1, black]);
+    ctx.beginPath();
+    ctx.moveTo(Lx + 120, yBot - 62); ctx.lineTo(Rx - 120, yBot - 62);
+    ctx.lineTo(Rx - 168, GY - 34); ctx.lineTo(Lx + 168, GY - 34);
+    ctx.closePath();
     ctx.fill();
+    if (R.fins) {
+      ctx.strokeStyle = lit('#30333b');
+      ctx.lineWidth = 7;
+      const span = bw2 * 0.62;
+      for (let i = 0; i < R.fins; i++) {
+        const xx = cx - span / 2 + (span * (i + 0.5)) / R.fins;
+        ctx.beginPath(); ctx.moveTo(xx, yBot - 24); ctx.lineTo(xx + (xx - cx) * 0.06, GY - 38); ctx.stroke();
+      }
+    }
 
-    // --- Cabina
-    cabinPath(0);
-    const cabC = R.two ? sec : paint;
-    ctx.fillStyle = U.lin(ctx, 0, yRoof, 0, yDeck, [0, U.shade(cabC, 0.28), 1, U.shade(cabC, -0.12)]);
-    ctx.fill();
 
-    // franjas (Mustang)
+    // franjas (Mustang): solo sobre el panel trasero; en el techo las pinta la malla
     if (R.stripes) {
       ctx.save();
-      bodyPath(); cabinPath(0, false);
+      bodyPath();
       ctx.clip();
       ctx.fillStyle = lit(R.stripes);
-      ctx.fillRect(cx + f * 16 - 50, yRoof - 10, 36, GY);
-      ctx.fillRect(cx + f * 16 + 14, yRoof - 10, 36, GY);
+      ctx.fillRect(cx - 50, yDeck - 30, 36, GY);
+      ctx.fillRect(cx + 14, yDeck - 30, 36, GY);
       ctx.restore();
     }
 
-    // cristal
-    cabinPath(22);
-    ctx.fillStyle = U.lin(ctx, 0, yRoof, 0, yDeck, [0, lit('#3c4c68'), 0.5, lit('#141c2a'), 1, lit('#0a0f18')]);
-    ctx.fill();
-    ctx.save();
-    cabinPath(22);
-    ctx.clip();
-    if (R.engine === 1) {
-      ctx.strokeStyle = lit('#2e3544');
-      ctx.lineWidth = 6;
-      for (let y = yRoof + 56; y < yDeck; y += 15) {
-        ctx.beginPath(); ctx.moveTo(ccx - cw, y); ctx.lineTo(ccx + cw, y); ctx.stroke();
-      }
-    }
-    ctx.fillStyle = 'rgba(255,255,255,' + (0.13 * L).toFixed(3) + ')';
-    ctx.beginPath();
-    ctx.moveTo(ccx - ct + 10, yRoof); ctx.lineTo(ccx - ct + 80, yRoof);
-    ctx.lineTo(ccx - ct - 30, yDeck); ctx.lineTo(ccx - ct - 100, yDeck);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-
-    // tercera luz de freno
-    if (R.h > 0.55) {
-      ctx.fillStyle = night ? '#ff4a58' : '#b3001a';
-      U.rr(ctx, ccx - 54, yRoof + 30, 108, 7, 3);
-      ctx.fill();
-      lights.push([ccx, yRoof + 34, 40]);
-    }
-
-    // aleta de tiburón (Valkyrie)
-    if (R.fin) {
-      ctx.fillStyle = U.lin(ctx, 0, yRoof - 40, 0, yDeck, [0, U.shade(paint, 0.2), 1, U.shade(paint, -0.2)]);
-      ctx.beginPath();
-      ctx.moveTo(ccx - 7, yDeck); ctx.lineTo(ccx - 5, yRoof - 30); ctx.lineTo(ccx + 5, yRoof - 30); ctx.lineTo(ccx + 7, yDeck);
-      ctx.closePath();
-      ctx.fill();
-    }
-
-    // --- Retrovisores
-    const my = yDeck - 16 - (yDeck - yRoof) * 0.22;
-    [-1, 1].forEach((sd) => {
-      const mx = ccx + sd * (cw + 40);
-      ctx.fillStyle = U.lin(ctx, 0, my - 22, 0, my + 18, [0, U.shade(paint, 0.2), 1, U.shade(paint, -0.25)]);
-      U.ellipse(ctx, mx, my, 36, 21);
-      ctx.fill();
-      ctx.fillStyle = black;
-      U.ellipse(ctx, mx, my + 10, 26, 7);
-      ctx.fill();
-    });
-
-    // --- Brillo de la laca
-    ctx.save();
-    bodyPath();
-    ctx.clip();
-    ctx.fillStyle = U.lin(ctx, 0, yDeck - 14, 0, yDeck + 72, [0, 'rgba(255,255,255,' + (0.5 * L).toFixed(3) + ')', 1, 'rgba(255,255,255,0)']);
-    ctx.fillRect(Lx - 20, yDeck - 24, bw2 * 2 + 40, 96);
-    ctx.fillStyle = U.lin(ctx, Lx, 0, Rx, 0, [0, 'rgba(0,0,0,0.4)', 0.15, 'rgba(0,0,0,0)', 0.85, 'rgba(0,0,0,0)', 1, 'rgba(0,0,0,0.4)']);
-    ctx.fillRect(Lx - 20, yDeck - 24, bw2 * 2 + 40, GY);
-    ctx.fillStyle = U.rad(ctx, cx - bw2 * 0.35, yDeck + 26, 0, 160, [0, 'rgba(255,255,255,' + (0.22 * L).toFixed(3) + ')', 1, 'rgba(255,255,255,0)']);
-    ctx.fillRect(Lx, yDeck - 30, bw2 * 2, 220);
-    ctx.restore();
-    ctx.strokeStyle = 'rgba(255,255,255,' + (0.16 * L).toFixed(3) + ')';
-    ctx.lineWidth = 3;
-    bodyPath();
-    ctx.stroke();
-
     // --- Rejilla (mesh) inferior
-    const meshTop = yDeck + 104, meshBot = yBot - 8;
+    const meshTop = yDeck + 122, meshBot = yBot - 22;
     if (R.mesh) {
       ctx.fillStyle = black;
-      U.rr(ctx, Lx + 84, meshTop, bw2 * 2 - 168, meshBot - meshTop, 16);
+      U.rr(ctx, Lx + 110, meshTop, bw2 * 2 - 220, meshBot - meshTop, 14);
       ctx.fill();
       ctx.save();
-      U.rr(ctx, Lx + 84, meshTop, bw2 * 2 - 168, meshBot - meshTop, 16);
+      U.rr(ctx, Lx + 110, meshTop, bw2 * 2 - 220, meshBot - meshTop, 14);
       ctx.clip();
-      ctx.strokeStyle = lit('#262a31');
+      ctx.strokeStyle = lit('#2c3038');
       ctx.lineWidth = 3;
       for (let x = Lx + 40; x < Rx; x += 18) {
         ctx.beginPath(); ctx.moveTo(x, meshTop); ctx.lineTo(x + 36, meshBot); ctx.stroke();
@@ -465,68 +326,12 @@
       default: metal(cx, eyLow, 24);
     }
 
-    // --- Alerones
-    const wingDraw = (wy, wx, th, plates, postX) => {
+    if (R.spoiler === 'lip') {
       ctx.fillStyle = carbon;
-      [-1, 1].forEach((sd) => {
-        const px = cx + sd * postX;
-        ctx.beginPath();
-        ctx.moveTo(px - 9, yDeck + 2); ctx.lineTo(px - 6, wy + th); ctx.lineTo(px + 6, wy + th); ctx.lineTo(px + 9, yDeck + 2);
-        ctx.closePath(); ctx.fill();
-      });
-      ctx.fillStyle = U.lin(ctx, 0, wy, 0, wy + th, [0, U.shade(carbon, 0.35), 1, black]);
-      U.rr(ctx, cx - wx, wy, wx * 2, th, th / 2);
+      U.rr(ctx, cx - bw2 * 0.7, yDeck - 10, bw2 * 1.4, 10, 4);
       ctx.fill();
-      ctx.fillStyle = carbon;
-      [-1, 1].forEach((sd) => { U.rr(ctx, cx + sd * wx - 8, wy - plates * 0.35, 16, plates, 5); ctx.fill(); });
-    };
-    switch (R.spoiler) {
-      case 'duck':
-        ctx.fillStyle = U.lin(ctx, 0, yDeck - 22, 0, yDeck, [0, U.shade(paint, 0.3), 1, U.shade(paint, -0.1)]);
-        ctx.beginPath();
-        ctx.moveTo(Lx + 90, yDeck - 4); ctx.quadraticCurveTo(cx, yDeck - 30 - R.arch, Rx - 90, yDeck - 4);
-        ctx.quadraticCurveTo(cx, yDeck - 12 - R.arch, Lx + 90, yDeck - 4);
-        ctx.fill();
-        break;
-      case 'lip':
-        ctx.fillStyle = carbon;
-        U.rr(ctx, cx - bw2 * 0.7, yDeck - 10, bw2 * 1.4, 10, 4);
-        ctx.fill();
-        break;
-      case 'active':
-        ctx.fillStyle = black;
-        ctx.fillRect(cx - bw2 * 0.6, yDeck - 12, bw2 * 1.2, 8);
-        ctx.fillStyle = U.lin(ctx, 0, yDeck - 26, 0, yDeck - 12, [0, U.shade(paint, 0.3), 1, U.shade(paint, -0.2)]);
-        U.rr(ctx, cx - bw2 * 0.62, yDeck - 26, bw2 * 1.24, 14, 6);
-        ctx.fill();
-        break;
-      case 'wing': wingDraw(yRoof + 34, bw2 * 0.86, 18, 56, bw2 * 0.34); break;
-      case 'bigwing': wingDraw(yRoof - 14, bw2 * 0.96, 24, 76, bw2 * 0.3); break;
-      case 'swan': {
-        const wy = yRoof - 34, wx = bw2 * 0.9;
-        ctx.strokeStyle = carbon; ctx.lineWidth = 14;
-        [-1, 1].forEach((sd) => {
-          const px = cx + sd * bw2 * 0.28;
-          ctx.beginPath(); ctx.moveTo(px, yDeck); ctx.quadraticCurveTo(px - sd * 4, wy - 14, px + sd * 16, wy - 10); ctx.lineTo(px + sd * 22, wy + 6); ctx.stroke();
-        });
-        ctx.fillStyle = U.lin(ctx, 0, wy, 0, wy + 22, [0, U.shade(carbon, 0.4), 1, black]);
-        U.rr(ctx, cx - wx, wy, wx * 2, 22, 11); ctx.fill();
-        ctx.fillStyle = carbon;
-        [-1, 1].forEach((sd) => { U.rr(ctx, cx + sd * wx - 8, wy - 26, 16, 70, 5); ctx.fill(); });
-        break;
-      }
-      case 'integrated':
-        ctx.fillStyle = U.lin(ctx, 0, yDeck - 40, 0, yDeck - 22, [0, U.shade(paint, 0.3), 1, U.shade(paint, -0.25)]);
-        U.rr(ctx, cx - bw2 * 0.92, yDeck - 40, bw2 * 1.84, 16, 8);
-        ctx.fill();
-        ctx.fillStyle = black;
-        ctx.fillRect(cx - bw2 * 0.86, yDeck - 24, bw2 * 1.72, 10);
-        break;
-      default: break;
     }
-
-    const nrm = (arr) => arr.map((p) => [p[0] / 1000, p[1] / 780, p[2] / 1000]);
-    return { img: cv, lights: nrm(lights), exh: nrm(exh), ground: GY / 780 };
+    return { img: cv, k, x0, y0, cx, GY, bw2, yDeck, lights, exh };
   };
 
   // Emblemas genéricos (formas evocadoras, sin logotipos reales)
@@ -636,6 +441,8 @@
     ctx.fillStyle = '#1b1d22';
     ctx.beginPath(); ctx.arc(x, y, rr * 0.07, 0, Math.PI * 2); ctx.fill();
   }
+
+  Art.drawWheel = drawWheel;
 
   Art.carSide = function (model, color, opt) {
     opt = opt || {};

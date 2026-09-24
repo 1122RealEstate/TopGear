@@ -14,7 +14,9 @@
       model, color, up: up || {}, st, name: o.name || '', isPlayer: !!o.player, pIndex: o.pIndex == null ? -1 : o.pIndex,
       profile: o.profile || 'solo', autopilot: !!o.autopilot, manual: !!o.manual,
       z: 0, x: 0, speed: 0, lapsDone: -1, finished: false, finishTime: 0, finishPos: 0, progress: 0, pos: 0,
-      steer: 0, steerVis: 0, throttle: 0, braking: false,
+      steer: 0, steerVis: 0, throttle: 0, braking: false, vx: 0, latV: 0, lastX: 0, lastSpeed: 0, lastThr: 0,
+      vis: { yaw: 0, roll: 0, rollV: 0, pitch: 0, pitchV: 0, heave: 0, heaveV: 0, steer: 0, blur: 0 },
+      backfire: 0, shiftPuff: 0, burn: 0, bumpSmoke: 0,
       gear: 1, rpm: model.eng.idle, shiftT: 0,
       nitroN: st.nitroN, nitroT: 0, fuel: 100,
       offroad: false, crashT: 0, bumpT: 0, slip: 0, air: 0, airV: 0, draft: 0, spinT: 0, perfect: false,
@@ -61,12 +63,20 @@
       const nAI = cfg.rivals || 0;
       const drivers = cfg.drivers || Race.makeDrivers(this.cup, nAI, def.seed);
       const ref = (cfg.aiRef || this.cup.ai) * C.KMH;
+      // dificultad: sube poco a poco con cada carrera del campeonato (0 = primera, 1 = última)
+      const D = TG.DIFFICULTY[TG.Save.data.settings.difficulty] || TG.DIFFICULTY.normal;
+      const lvl = this.demo ? 0.5 : U.clamp(TG.raceLevel(def) + D.off, 0, 1);
+      this.level = lvl;
       drivers.slice(0, nAI).forEach((d, rank) => {
         const model = TG.CAR[d.carId];
         const car = makeCar(model, d.color, {}, { name: d.name });
         const skill = d.skill != null ? d.skill : 1 - rank / Math.max(1, nAI);
-        const vmax = ref * (0.87 + 0.13 * skill) * U.rand(0.992, 1.008) * (this.demo ? U.rand(0.8, 0.95) : 1);
-        car.ai = { vmax, tol: 3.0 + skill * 1.6, brakeK: 0.075, lane: 0, laneT: 0, jitter: U.rand(-0.05, 0.05), rubber: 1, nitroN: skill > 0.4 ? 2 : 1, skill, did: d.id };
+        const vmax = ref * (0.87 + 0.13 * skill) * (0.972 + 0.052 * lvl) * D.spd * U.rand(0.992, 1.008) * (this.demo ? U.rand(0.8, 0.95) : 1);
+        car.ai = {
+          vmax, tol: 3.0 + skill * 1.6 + lvl * 0.5, brakeK: 0.075 - lvl * 0.012, lane: 0, laneT: 0, jitter: U.rand(-0.05, 0.05), rubber: 1,
+          nitroN: (skill > 0.4 ? 2 : 1) + (lvl > 0.55 && skill > 0.3 ? 1 : 0), skill, did: d.id,
+          lvl, mistake: (1 - lvl) * 0.07 * (1.25 - skill), errT: 0, lat: 0.9 + 0.45 * lvl, defT: 0,
+        };
         car.st = Object.assign({}, car.st, { vmax, accel: (100 * C.KMH) / model.acc * 1.05 });
         this.cars.push(car);
       });
@@ -186,7 +196,54 @@
         for (const p of this.players) if (p.inp) { p.inp.nitro = false; p.inp.up = false; p.inp.down = false; }
       }
       if (steps >= 14) this.acc = 0;
+      this.updateVisuals(dt);
       this.updateCams(dt);
+    }
+
+    // Movimiento de la carrocería: guiñada, dirección de las ruedas, balanceo, cabeceo y suspensión
+    updateVisuals(dt) {
+      if (!(dt > 0)) return;
+      const T = this.track;
+      const list = this.ghostCar ? this.cars.concat([this.ghostCar]) : this.cars;
+      const kx = 1 - Math.exp(-dt * 12), ky = 1 - Math.exp(-dt * 7), ks = 1 - Math.exp(-dt * 14);
+      for (let i = 0; i < list.length; i++) {
+        const c = list[i], v = c.vis;
+        const seg = T.findSegment(c.z);
+        const sp = c.speed / c.st.vmax;
+        let lv = (c.x - c.lastX) / dt;
+        if (Math.abs(lv) > 12) lv = 0;
+        c.latV += (lv - c.latV) * kx;
+        const acc = U.clamp((c.speed - c.lastSpeed) / dt, -9000, 6000);
+        c.lastX = c.x; c.lastSpeed = c.speed;
+        // guiñada: el morro sigue la trayectoria; al derrapar entra más en la curva
+        const slide = c.isPlayer ? c.slip * 0.15 * (Math.sign(seg.curve) || Math.sign(c.steer) || 0) : 0;
+        const spin = c.spinT > 0 ? Math.sin(this.time * 17) * 0.06 : 0;
+        // al girar, la carrocería apunta sutilmente hacia el lado del giro y deja ver el costado y la rueda
+        const steerYaw = c.isPlayer ? c.steer * 0.13 * Math.min(1, 0.35 + sp * 1.3) : c.steerVis * 0.06 * Math.min(1, sp * 1.6);
+        const yawT = U.clamp(((c.latV * C.ROAD_W) / Math.max(c.speed, 1400)) * 0.45 + steerYaw, -0.26, 0.26) + slide + spin;
+        v.yaw += (yawT - v.yaw) * ky;
+        // ruedas delanteras: giran con la dirección (la IA también las gira en las curvas)
+        const st = c.isPlayer ? c.steer : U.clamp(c.steerVis + seg.curve * sp * 0.09, -1, 1);
+        v.steer += (st * U.lerp(0.46, 0.3, Math.min(1, sp)) - v.steer) * ks;
+        // inclinación sutil hacia el lado al que se gira (derecha → derecha, izquierda → izquierda)
+        const turn = c.isPlayer ? c.steer : U.clamp(c.steerVis + seg.curve * sp * 0.09, -1, 1);
+        const rollT = U.clamp(turn * 0.042 * Math.min(1, 0.3 + sp * 1.2) + U.clamp(c.latV, -3, 3) * 0.004, -0.06, 0.06);
+        v.rollV += ((rollT - v.roll) * 110 - v.rollV * 12) * dt;
+        v.roll += v.rollV * dt;
+        // cabeceo: se agacha al acelerar y hunde el morro al frenar
+        const pitchT = U.clamp(acc > 0 ? acc * 0.000014 : acc * 0.0000075, -0.036, 0.024);
+        v.pitchV += ((pitchT - v.pitch) * 95 - v.pitchV * 11) * dt;
+        v.pitch += v.pitchV * dt;
+        // suspensión: baches fuera de pista y vibración a alta velocidad
+        if (c.offroad && c.speed > 200) { v.heaveV += U.rand(-1, 1) * 0.05 * Math.min(1, sp * 1.4); v.rollV += U.rand(-1, 1) * 0.06; }
+        else if (sp > 0.5) v.heaveV += U.rand(-1, 1) * 0.004 * sp;
+        v.heaveV += (-v.heave * 160 - v.heaveV * 13) * dt;
+        v.heave += v.heaveV * dt;
+        v.heave = U.clamp(v.heave, -0.02, 0.02);
+        v.roll = U.clamp(v.roll, -0.1, 0.1);
+        v.pitch = U.clamp(v.pitch, -0.06, 0.05);
+        v.blur = sp > 0.28 ? 1 : 0;
+      }
     }
 
     step(dt) {
@@ -226,6 +283,7 @@
         const target = eng.idle + (eng.red - eng.idle) * (acc ? 0.95 : 0);
         car.rpm = U.approach(car.rpm, target, (acc ? 5000 : 3800) * dt);
         car.throttle = acc ? 1 : 0;
+        car.burn = U.approach(car.burn, acc && this.phase === 'count' && car.rpm > eng.red * 0.88 ? 1 : 0, dt * 3);
       }
       for (const car of this.cars) if (!car.isPlayer) car.rpm = car.model.eng.idle * 1.2;
     }
@@ -254,8 +312,12 @@
       if (inp.nitro && car.nitroT <= 0 && car.nitroN > 0 && !car.finished) {
         car.nitroN--; car.nitroT = st.nitroDur; this.emit('nitro', { car });
       }
+      const eng0 = car.model.eng;
       if (car.manual && !car.autopilot) {
-        if (inp.up && car.gear < st.gears) { car.gear++; car.shiftT = st.shift * 0.7; this.emit('shift', { car }); }
+        if (inp.up && car.gear < st.gears) {
+          car.gear++; car.shiftT = st.shift * 0.7; car.shiftPuff = 0.07; this.emit('shift', { car });
+          if (car.rpm > eng0.red * 0.8 && Math.random() < 0.45) { car.backfire = 0.08; this.emit('backfire', { car, soft: true }); }
+        }
         if (inp.down && car.gear > 1) { car.gear--; car.shiftT = st.shift * 0.4; this.emit('shift', { car }); }
       }
 
@@ -264,24 +326,41 @@
       if (car.nitroT > 0) vmax *= st.nitroPow;
       if (car.draft > 0.5) vmax *= 1.05;
 
-      // dirección
+      // dirección: rampa progresiva, más suave cuanto más rápido (estabilidad)
       let target = inp.steerTarget != null ? inp.steerTarget : (inp.left ? -1 : 0) + (inp.right ? 1 : 0);
-      const reversing = target !== 0 && car.steer !== 0 && Math.sign(target) !== Math.sign(car.steer);
-      const rate = target === 0 ? 7 : reversing ? 9 : 4.4;
-      car.steer = U.approach(car.steer, target, rate * dt);
       const sp = car.speed / st.vmax;
+      const hs = U.clamp((sp - 0.3) / 0.7, 0, 1);
+      const reversing = target !== 0 && car.steer !== 0 && Math.sign(target) !== Math.sign(car.steer);
+      const rate = target === 0 ? U.lerp(7.5, 5.6, hs) : reversing ? U.lerp(10, 7.2, hs) : U.lerp(5.2, 3.5, hs);
+      car.steer = U.approach(car.steer, target, rate * dt);
       const auth = U.clamp(car.speed / (st.vmax * 0.22), 0, 1);
       const crashK = car.crashT > 0 ? 0.35 : 1;
-      car.x += car.steer * C.STEER * auth * crashK * dt * (0.92 + 0.08 * grip);
       const drift = (seg.curve * sp * sp * C.CENTRI) / grip;
-      car.x -= drift * dt;
-      car.slip = U.clamp((Math.abs(drift) - 1.05) / 1.1 + (Math.abs(car.steer) > 0.85 && sp > 0.75 ? 0.2 : 0), 0, 1);
+      // inercia lateral: el coche no se desplaza de golpe, sigue a la dirección con un pequeño retardo
+      const want = car.steer * C.STEER * auth * crashK * (0.92 + 0.08 * grip) - drift;
+      const resp = (car.offroad ? 6.5 : 10.5) * (0.88 + 0.12 * Math.min(1.5, grip));
+      car.vx += (want - car.vx) * (1 - Math.exp(-resp * dt));
+      car.x += car.vx * dt;
+      // derrape: cuando la curva pide casi todo el agarre, o al frenar fuerte girando
+      const turning = Math.abs(car.steer);
+      const demand = Math.abs(drift) / (C.STEER * 0.95);
+      let slipT = U.clamp((demand - 0.62) * 2.3, 0, 1) * U.clamp(sp * 1.5, 0, 1);
+      if (turning > 0.6 && sp > 0.62) slipT = Math.max(slipT, (sp - 0.62) * 2.1 * turning * (Math.sign(car.steer) === Math.sign(seg.curve) ? 1 : 0.55));
+      if (inp.brake && sp > 0.45) slipT = Math.max(slipT, (sp - 0.45) * (0.45 + turning) * 1.3);
+      if (this.gripW < 1) slipT *= 1.15;
+      car.slip = U.approach(car.slip, U.clamp(slipT, 0, 1), dt * (slipT > car.slip ? 5 : 2.5));
+      if (car.slip > 0.3) car.speed -= car.slip * st.vmax * 0.035 * dt;
       car.offroad = Math.abs(car.x) > 1.0 + C.CAR_W * 0.25;
 
       // motor
       const eng = car.model.eng;
       const acc = !!inp.accel && !(car.finished && !car.autopilot);
       car.throttle = U.approach(car.throttle, acc ? 1 : 0, dt * 8);
+      if (car.lastThr > 0.85 && car.throttle < 0.3 && car.rpm > eng.red * 0.66 && car.backfire <= 0) {
+        if (Math.random() < 0.6) { car.backfire = 0.1; car.shiftPuff = 0.06; this.emit('backfire', { car }); }
+      }
+      car.lastThr = car.throttle > car.lastThr || car.throttle < 0.3 ? car.throttle : car.lastThr;
+      if (car.backfire > 0) car.backfire -= dt;
       let a = st.accel * Math.max(0, 1 - Math.pow(car.speed / vmax, 2.2));
       if (car.manual) {
         const gt = this.gearTop(car, car.gear);
@@ -316,7 +395,7 @@
       if (car.air > 0 || car.airV > 0) {
         car.airV -= 2800 * dt;
         car.air += car.airV * dt;
-        if (car.air <= 0) { car.air = 0; if (car.airV < -350) this.emit('land', { car }); car.airV = 0; }
+        if (car.air <= 0) { car.air = 0; if (car.airV < -350) { this.emit('land', { car }); car.vis.heaveV -= 0.1; car.vis.pitchV -= 0.2; } car.airV = 0; }
       }
 
       // combustible
@@ -333,7 +412,10 @@
       if (!car.manual || car.autopilot) {
         if (car.shiftT <= 0) {
           const rn = car.speed / this.gearTop(car, car.gear);
-          if (rn > 0.95 && car.gear < st.gears) { car.gear++; car.shiftT = st.shift; this.emit('shift', { car }); }
+          if (rn > 0.95 && car.gear < st.gears) {
+            car.gear++; car.shiftT = st.shift; car.shiftPuff = 0.07; this.emit('shift', { car });
+            if (car.throttle > 0.8 && Math.random() < 0.3) { car.backfire = 0.08; this.emit('backfire', { car, soft: true }); }
+          }
           else if (car.gear > 1 && car.speed < this.gearTop(car, car.gear - 1) * 0.72) { car.gear--; car.shiftT = st.shift * 0.4; }
         }
       }
@@ -353,7 +435,7 @@
       if (car.z < oldZ && car.speed > 0) this.lapCross(car);
       this.sceneryCollide(car, oldZ);
       this.pickupCheck(car, oldZ);
-      car.x = U.clamp(car.x, -3.2, 3.2);
+      if (Math.abs(car.x) > 3.2) { car.x = U.clamp(car.x, -3.2, 3.2); car.vx = 0; }
       car.steerVis = car.steer;
     }
 
@@ -423,10 +505,27 @@
       const tol = ai.tol + (this.gripW < 1 ? (snow ? -0.9 : -0.6) : 0);
       if (maxC > tol) target *= Math.max(0.55, 1 - (maxC - tol) * ai.brakeK);
       if (this.gripW < 1) target *= snow ? 0.965 : 0.982;
+      // errores ocasionales (más frecuentes en las primeras copas)
+      if (ai.errT > 0) { ai.errT -= dt; target *= 0.88; }
+      else if (this.phase === 'race' && maxC > 2 && Math.random() < ai.mistake * dt) ai.errT = U.rand(0.5, 1.2);
       target *= ai.rubber;
       if (car.nitroT > 0) target *= 1.14;
       if (car.finished) target *= 0.85;
       ai.laneT -= dt;
+      // en niveles altos los mejores rivales defienden la posición cerrando el hueco
+      if (ai.defT > 0) ai.defT -= dt;
+      else if (ai.lvl > 0.35 && ai.skill > 0.45 && this.phase === 'race' && !car.finished) {
+        const L = this.track.length;
+        for (let i = 0; i < this.players.length; i++) {
+          const p = this.players[i];
+          let dz = car.z - p.z;
+          if (dz < -L / 2) dz += L; else if (dz > L / 2) dz -= L;
+          if (dz > C.SEG * 1.5 && dz < C.SEG * 6 && p.speed > car.speed * 1.01 && Math.random() < ai.lvl * 0.9 * dt) {
+            ai.lane = U.clamp(p.x, -0.62, 0.62); ai.laneT = 1.1; ai.defT = U.rand(4, 7);
+            break;
+          }
+        }
+      }
       const ahead = this.nearestAhead(car, 8 * C.SEG, C.CAR_W * 1.1);
       if (ahead) {
         if (ai.laneT <= 0 && ahead.car.speed < car.speed * 1.02) {
@@ -440,17 +539,20 @@
       if (car.speed < target) car.speed = Math.min(target, car.speed + a * dt);
       else car.speed = Math.max(target, car.speed - st.vmax * 0.55 * dt);
       car.braking = car.speed > target + 40 || target < ai.vmax * ai.rubber * 0.9;
+      car.throttle = car.speed < target - 20 ? 1 : 0.35;
       const tx = U.clamp(ai.lane + ai.jitter, -0.8, 0.8);
       const dx = tx - car.x;
-      const mv = Math.sign(dx) * Math.min(Math.abs(dx), 1.0 * dt);
+      const mv = Math.sign(dx) * Math.min(Math.abs(dx), ai.lat * dt);
       car.x += mv;
       car.steerVis = U.approach(car.steerVis, U.clamp(dx * 4, -1, 1), dt * 5);
       if (ai.nitroN > 0 && this.phase === 'race' && car.lapsDone >= 1 && maxC < 1 && car.speed > ai.vmax * 0.8 && Math.random() < dt * 0.08) {
         ai.nitroN--; car.nitroT = 2.2;
       }
       if (car.nitroT > 0) car.nitroT -= dt;
+      if (car.backfire > 0) car.backfire -= dt;
+      if (car.bumpSmoke > 0) car.bumpSmoke = Math.max(0, car.bumpSmoke - dt * 1.5);
       const gt = this.gearTop(car, car.gear);
-      if (car.speed > gt * 0.95 && car.gear < st.gears) car.gear++;
+      if (car.speed > gt * 0.95 && car.gear < st.gears) { car.gear++; car.shiftPuff = 0.05; if (Math.random() < 0.12) car.backfire = 0.07; }
       else if (car.gear > 1 && car.speed < this.gearTop(car, car.gear - 1) * 0.72) car.gear--;
       car.rpm = car.model.eng.idle + (car.model.eng.red - car.model.eng.idle) * U.clamp(car.speed / this.gearTop(car, car.gear), 0, 1);
       const oldZ = car.z;
@@ -523,7 +625,10 @@
       else car.speed = Math.min(car.speed, st.vmax * (0.1 + (1 - st.crash) * 0.5));
       car.crashT = 0.6;
       const dir = car.x > 0 ? -1 : 1;
-      car.x += dir * (soft ? 0.12 : 0.28);
+      car.x += dir * (soft ? 0.08 : 0.16);
+      car.vx = dir * (soft ? 0.9 : 1.8);
+      car.vis.heaveV += soft ? 0.03 : 0.07;
+      car.vis.rollV += dir * (soft ? 0.25 : 0.8);
       car.nitroT = 0;
       if (!soft && before > st.vmax * 0.25) car.crashes++;
       this.emit('crash', { car, soft, strength: before / st.vmax });
@@ -575,6 +680,8 @@
           const s = dx >= 0 ? -1 : 1;
           p.x += s * push;
           o.x -= s * push;
+          p.vx += s * 0.5;
+          if (p.bumpT > 0.3) { p.vis.rollV += s * 0.35; o.vis.rollV -= s * 0.35; o.bumpSmoke = Math.max(o.bumpSmoke, 0.7); }
           if (o.ai) { o.ai.lane = U.clamp(o.x - s * 0.1, -0.7, 0.7); o.ai.laneT = 0.8; }
         }
       }
@@ -608,8 +715,9 @@
         if (!c.ai) continue;
         const d = (c.progress - ref) / L;
         let r = 1;
-        if (d > 0.06) r = U.lerp(1, 0.93, U.clamp((d - 0.06) / 0.3, 0, 1));
-        else if (d < -0.12) r = U.lerp(1, 1.05, U.clamp((-d - 0.12) / 0.3, 0, 1));
+        const lv = c.ai.lvl;
+        if (d > 0.06) r = U.lerp(1, U.lerp(0.9, 0.955, lv), U.clamp((d - 0.06) / 0.3, 0, 1));
+        else if (d < -0.12) r = U.lerp(1, U.lerp(1.03, 1.07, lv), U.clamp((-d - 0.12) / 0.3, 0, 1));
         c.ai.rubber = r;
       }
     }

@@ -155,7 +155,13 @@
         [523, 659, 784].forEach((f) => T({ f, type: 'triangle', dur: 1.4, vol: 0.06, when: t + 0.55, attack: 0.02 }));
         break;
       case 'shift': N({ dur: 0.05, vol: 0.08, type: 'highpass', f: 2500 }); break;
-      case 'pop': N({ dur: 0.07, vol: 0.22, type: 'lowpass', f: 1500 }); T({ f: 95, type: 'square', dur: 0.05, vol: 0.1, filter: { f: 600 } }); break;
+      case 'pop': {
+        const k = opt || 1;
+        N({ dur: 0.09, vol: 0.32 * k, type: 'lowpass', f: 2400, f2: 280 });
+        T({ f: 115, f2: 48, type: 'square', dur: 0.07, vol: 0.12 * k, filter: { f: 700 } });
+        if (Math.random() < 0.55) N({ dur: 0.06, vol: 0.22 * k, type: 'lowpass', f: 1900, when: t + 0.06 + Math.random() * 0.06 });
+        break;
+      }
       case 'whoosh': N({ dur: 0.55, vol: opt || 0.15, type: 'bandpass', f: 2200, f2: 500, q: 1.1, attack: 0.08 }); break;
       case 'land': T({ f: 95, f2: 40, type: 'sine', dur: 0.22, vol: 0.35 }); N({ dur: 0.12, vol: 0.2, type: 'lowpass', f: 700 }); break;
       case 'thunder':
@@ -247,7 +253,6 @@
           twg.gain.setTargetAtTime(throttle * 0.016 * (rpm / prof.red) * volume, t, 0.18);
           if (lastThr > 0.8 && throttle < 0.2 && rpm > prof.red * 0.6) A.noiseHit({ dur: 0.35, vol: 0.06 * volume, type: 'highpass', f: 3000 });
         }
-        if (lastThr > 0.8 && throttle < 0.2 && rpm > prof.red * 0.7 && Math.random() < 0.5) setTimeout(() => A.play('pop'), 60 + Math.random() * 120);
         lastThr = throttle;
         if (pan && panV != null) pan.pan.setTargetAtTime(U.clamp(panV, -1, 1), t, 0.05);
       },
@@ -277,6 +282,41 @@
     };
   };
 
+  // Chirrido de neumáticos: dos dientes de sierra filtrados con vibrato + siseo
+  A.squeal = function () {
+    if (!A.ready) return null;
+    const ctx = A.ctx;
+    const out = ctx.createGain(); out.gain.value = 0;
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1150; bp.Q.value = 3.5;
+    const o1 = ctx.createOscillator(); o1.type = 'sawtooth'; o1.frequency.value = 820;
+    const o2 = ctx.createOscillator(); o2.type = 'sawtooth'; o2.frequency.value = 1236;
+    const g1 = ctx.createGain(); g1.gain.value = 0.5;
+    const g2 = ctx.createGain(); g2.gain.value = 0.32;
+    const lfo = ctx.createOscillator(); lfo.frequency.value = 7.3;
+    const lg = ctx.createGain(); lg.gain.value = 42;
+    lfo.connect(lg); lg.connect(o1.frequency); lg.connect(o2.frequency);
+    const nz = ctx.createBufferSource(); nz.buffer = A.noise; nz.loop = true;
+    const nf = ctx.createBiquadFilter(); nf.type = 'bandpass'; nf.frequency.value = 2600; nf.Q.value = 1.3;
+    const ng = ctx.createGain(); ng.gain.value = 0.6;
+    o1.connect(g1); o2.connect(g2); g1.connect(bp); g2.connect(bp); bp.connect(out);
+    nz.connect(nf); nf.connect(ng); ng.connect(out);
+    out.connect(A.sfx);
+    const nodes = [o1, o2, lfo, nz];
+    nodes.forEach((n) => n.start());
+    return {
+      set(vol, k) {
+        const t = ctx.currentTime;
+        out.gain.setTargetAtTime(Math.max(0, vol), t, 0.06);
+        if (k != null) { o1.frequency.setTargetAtTime(740 + k * 170, t, 0.12); o2.frequency.setTargetAtTime(1120 + k * 240, t, 0.12); }
+      },
+      stop() {
+        const t = ctx.currentTime;
+        out.gain.setTargetAtTime(0, t, 0.05);
+        nodes.forEach((n) => { try { n.stop(t + 0.4); } catch (e) { /* ok */ } });
+      },
+    };
+  };
+
   /* ---------- Gestor de sonido en carrera ---------- */
   A.raceStart = function (race) {
     A.raceStop();
@@ -286,7 +326,7 @@
     race.players.forEach((p) => st.engines.push({ car: p, v: A.engine(p.model.eng), vol }));
     st.traffic = A.engine({ cyl: 8, sub: 0.3, turbo: 0, red: 8000 });
     st.wind = A.loop('highpass', 900, 0.5);
-    st.screech = A.loop('bandpass', 1600, 6);
+    st.screech = A.squeal();
     st.off = A.loop('lowpass', 260, 0.7, true);
     st.rain = race.theme.weather === 'rain' ? A.loop('lowpass', 3500, 0.4) : null;
     A.rs = st;
@@ -323,7 +363,8 @@
       } else st.traffic.set(1000, 0, 0, 0);
     }
     st.wind && st.wind.set(0.09 * sp * sp * mute, 700 + sp * 1200);
-    st.screech && st.screech.set(demo ? 0 : 0.1 * p.slip * Math.min(1, sp * 2) * mute, 1400 + Math.sin(performance.now() / 90) * 200);
+    const sq = Math.max(p.slip, (p.burn || 0) * 0.85, p.spinT > 0 ? 0.9 : 0);
+    st.screech && st.screech.set(demo || sq < 0.22 ? 0 : 0.085 * Math.min(1, (sq - 0.15) * 1.4) * Math.min(1, sp * 2 + (p.burn || 0) + (p.spinT > 0 ? 1 : 0)) * mute, Math.min(1, sp));
     st.off && st.off.set(p.offroad ? 0.35 * Math.min(1, sp * 2) * mute : 0);
     st.rain && st.rain.set(0.08 * mute);
   };
